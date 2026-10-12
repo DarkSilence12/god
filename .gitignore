@@ -5,7 +5,7 @@ build/
 out/
 classes/
 
-# 打包产物：只保留发布用的主 jar（用 git add -f 单独加入），其余构建中间文件不入库
+# 打包产物全部不入库，发布用 jar 通过 GitHub Release 提供
 
 # 参考源码（鬼域模组），不属于本仓库的源码，不公开
 
