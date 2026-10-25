@@ -1,11 +1,15 @@
 package bai.god.support.smfs;
 
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.Identifier;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.world.World;
-import net.minecraft.item.ItemStack;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +33,7 @@ public class SmfsAPIWrapper {
      * 获取玩家的灵异伤害值
      * 从PlayerEvents的缓存数据中获取，与神秘复苏本体保持一致
      */
-    public static int getSpiritualPower(PlayerEntity player) {
+    public static int getSpiritualPower(Player player) {
         if (!isSmfsLoaded()) {
             LOGGER.debug("神秘复苏模组未加载，使用NBT检测灵异伤害");
             return SmfsIntegration.getSpiritualPower(player);
@@ -37,32 +41,32 @@ public class SmfsAPIWrapper {
 
         try {
             Class<?> playerEventsClass = Class.forName("com.xie.smfs.common.events.PlayerEvents");
-            java.lang.reflect.Method getSpiritAttributesMethod = playerEventsClass.getMethod("getSpiritAttributes", PlayerEntity.class);
+            java.lang.reflect.Method getSpiritAttributesMethod = playerEventsClass.getMethod("getSpiritAttributes", Player.class);
             Object spiritAttributes = getSpiritAttributesMethod.invoke(null, player);
 
-            if (spiritAttributes instanceof net.minecraft.nbt.NbtCompound) {
-                net.minecraft.nbt.NbtCompound nbt = (net.minecraft.nbt.NbtCompound) spiritAttributes;
+            if (spiritAttributes instanceof CompoundTag) {
+                CompoundTag nbt = (CompoundTag) spiritAttributes;
 
                 if (nbt.contains("spiritDamage")) {
-                    if (nbt.contains("spiritDamage", net.minecraft.nbt.NbtElement.DOUBLE_TYPE)) {
+                    if (nbt.contains("spiritDamage", Tag.TAG_DOUBLE)) {
                         return (int) nbt.getDouble("spiritDamage");
-                    } else if (nbt.contains("spiritDamage", net.minecraft.nbt.NbtElement.INT_TYPE)) {
+                    } else if (nbt.contains("spiritDamage", Tag.TAG_INT)) {
                         return nbt.getInt("spiritDamage");
                     }
                 }
 
                 if (nbt.contains("currentSpirit")) {
-                    if (nbt.contains("currentSpirit", net.minecraft.nbt.NbtElement.DOUBLE_TYPE)) {
+                    if (nbt.contains("currentSpirit", Tag.TAG_DOUBLE)) {
                         return (int) nbt.getDouble("currentSpirit");
-                    } else if (nbt.contains("currentSpirit", net.minecraft.nbt.NbtElement.INT_TYPE)) {
+                    } else if (nbt.contains("currentSpirit", Tag.TAG_INT)) {
                         return nbt.getInt("currentSpirit");
                     }
                 }
 
                 if (nbt.contains("maxSpirit")) {
-                    if (nbt.contains("maxSpirit", net.minecraft.nbt.NbtElement.DOUBLE_TYPE)) {
+                    if (nbt.contains("maxSpirit", Tag.TAG_DOUBLE)) {
                         return (int) nbt.getDouble("maxSpirit");
-                    } else if (nbt.contains("maxSpirit", net.minecraft.nbt.NbtElement.INT_TYPE)) {
+                    } else if (nbt.contains("maxSpirit", Tag.TAG_INT)) {
                         return nbt.getInt("maxSpirit");
                     }
                 }
@@ -75,23 +79,23 @@ public class SmfsAPIWrapper {
         return SmfsIntegration.getSpiritualPower(player);
     }
 
-    public static int getSpiritualResistance(PlayerEntity player) {
+    public static int getSpiritualResistance(Player player) {
         if (!isSmfsLoaded()) {
             return SmfsIntegration.getSpiritualResistance(player);
         }
 
         try {
             Class<?> playerEventsClass = Class.forName("com.xie.smfs.common.events.PlayerEvents");
-            java.lang.reflect.Method getSpiritAttributesMethod = playerEventsClass.getMethod("getSpiritAttributes", PlayerEntity.class);
+            java.lang.reflect.Method getSpiritAttributesMethod = playerEventsClass.getMethod("getSpiritAttributes", Player.class);
             Object spiritAttributes = getSpiritAttributesMethod.invoke(null, player);
 
-            if (spiritAttributes instanceof net.minecraft.nbt.NbtCompound) {
-                net.minecraft.nbt.NbtCompound nbt = (net.minecraft.nbt.NbtCompound) spiritAttributes;
+            if (spiritAttributes instanceof CompoundTag) {
+                CompoundTag nbt = (CompoundTag) spiritAttributes;
 
                 if (nbt.contains("spiritResistance")) {
-                    if (nbt.contains("spiritResistance", net.minecraft.nbt.NbtElement.DOUBLE_TYPE)) {
+                    if (nbt.contains("spiritResistance", Tag.TAG_DOUBLE)) {
                         return (int) nbt.getDouble("spiritResistance");
-                    } else if (nbt.contains("spiritResistance", net.minecraft.nbt.NbtElement.INT_TYPE)) {
+                    } else if (nbt.contains("spiritResistance", Tag.TAG_INT)) {
                         return nbt.getInt("spiritResistance");
                     }
                 }
@@ -103,31 +107,31 @@ public class SmfsAPIWrapper {
         return SmfsIntegration.getSpiritualResistance(player);
     }
 
-    public static int getSpiritualStrength(PlayerEntity player) {
+    public static int getSpiritualStrength(Player player) {
         if (!isSmfsLoaded()) {
             return SmfsIntegration.getSpiritualStrength(player);
         }
 
         try {
             Class<?> playerEventsClass = Class.forName("com.xie.smfs.common.events.PlayerEvents");
-            java.lang.reflect.Method getSpiritAttributesMethod = playerEventsClass.getMethod("getSpiritAttributes", PlayerEntity.class);
+            java.lang.reflect.Method getSpiritAttributesMethod = playerEventsClass.getMethod("getSpiritAttributes", Player.class);
             Object spiritAttributes = getSpiritAttributesMethod.invoke(null, player);
 
-            if (spiritAttributes instanceof net.minecraft.nbt.NbtCompound) {
-                net.minecraft.nbt.NbtCompound nbt = (net.minecraft.nbt.NbtCompound) spiritAttributes;
+            if (spiritAttributes instanceof CompoundTag) {
+                CompoundTag nbt = (CompoundTag) spiritAttributes;
 
                 if (nbt.contains("currentSpirit")) {
-                    if (nbt.contains("currentSpirit", net.minecraft.nbt.NbtElement.DOUBLE_TYPE)) {
+                    if (nbt.contains("currentSpirit", Tag.TAG_DOUBLE)) {
                         return (int) nbt.getDouble("currentSpirit");
-                    } else if (nbt.contains("currentSpirit", net.minecraft.nbt.NbtElement.INT_TYPE)) {
+                    } else if (nbt.contains("currentSpirit", Tag.TAG_INT)) {
                         return nbt.getInt("currentSpirit");
                     }
                 }
 
                 if (nbt.contains("maxSpirit")) {
-                    if (nbt.contains("maxSpirit", net.minecraft.nbt.NbtElement.DOUBLE_TYPE)) {
+                    if (nbt.contains("maxSpirit", Tag.TAG_DOUBLE)) {
                         return (int) nbt.getDouble("maxSpirit");
-                    } else if (nbt.contains("maxSpirit", net.minecraft.nbt.NbtElement.INT_TYPE)) {
+                    } else if (nbt.contains("maxSpirit", Tag.TAG_INT)) {
                         return nbt.getInt("maxSpirit");
                     }
                 }
@@ -139,7 +143,7 @@ public class SmfsAPIWrapper {
         return SmfsIntegration.getSpiritualStrength(player);
     }
 
-    public static boolean setSpiritualPower(PlayerEntity player, int power) {
+    public static boolean setSpiritualPower(Player player, int power) {
         if (!isSmfsLoaded()) {
             LOGGER.debug("神秘复苏模组未加载，使用NBT设置灵异力量");
             return SmfsIntegration.setSpiritualPower(player, power);
@@ -150,7 +154,7 @@ public class SmfsAPIWrapper {
             java.lang.reflect.Method getInstanceMethod = ghostAPIClass.getMethod("getInstance");
             Object ghostAPI = getInstanceMethod.invoke(null);
 
-            java.lang.reflect.Method setSpiritualStrengthMethod = ghostAPIClass.getMethod("setSpiritualStrength", PlayerEntity.class, Integer.TYPE);
+            java.lang.reflect.Method setSpiritualStrengthMethod = ghostAPIClass.getMethod("setSpiritualStrength", Player.class, Integer.TYPE);
             Object result = setSpiritualStrengthMethod.invoke(ghostAPI, player, power);
 
             if (result instanceof Boolean) {
@@ -164,15 +168,15 @@ public class SmfsAPIWrapper {
         return SmfsIntegration.setSpiritualPower(player, power);
     }
 
-    public static DamageSource getGhostDamageSource(World world) {
+    public static DamageSource getGhostDamageSource(Level world) {
         if (!isSmfsLoaded()) {
             LOGGER.debug("神秘复苏模组未加载");
-            return world.getDamageSources().magic();
+            return world.damageSources().magic();
         }
 
         try {
             Class<?> modDamageSourcesClass = Class.forName("com.xie.smfs.damage.ModDamageSources");
-            java.lang.reflect.Method ghostMethod = modDamageSourcesClass.getMethod("ghost", World.class);
+            java.lang.reflect.Method ghostMethod = modDamageSourcesClass.getMethod("ghost", Level.class);
             Object damageSource = ghostMethod.invoke(null, world);
 
             if (damageSource instanceof DamageSource) {
@@ -183,10 +187,10 @@ public class SmfsAPIWrapper {
         }
 
         // 备用方案：使用魔法伤害源
-        return world.getDamageSources().magic();
+        return world.damageSources().magic();
     }
 
-    public static boolean hasTamedGhost(PlayerEntity player, String ghostType) {
+    public static boolean hasTamedGhost(Player player, String ghostType) {
         if (!isSmfsLoaded()) {
             LOGGER.debug("神秘复苏模组未加载，使用NBT检查驾驭状态");
             return SmfsIntegration.hasTamedGhostInNBT(player, ghostType);
@@ -197,7 +201,7 @@ public class SmfsAPIWrapper {
             java.lang.reflect.Method getInstanceMethod = tameableItemAPIClass.getMethod("getInstance");
             Object tameableAPI = getInstanceMethod.invoke(null);
 
-            java.lang.reflect.Method hasTamedGhostMethod = tameableItemAPIClass.getMethod("hasTamedGhost", PlayerEntity.class, String.class);
+            java.lang.reflect.Method hasTamedGhostMethod = tameableItemAPIClass.getMethod("hasTamedGhost", Player.class, String.class);
             Object result = hasTamedGhostMethod.invoke(tameableAPI, player, ghostType);
 
             if (result instanceof Boolean) {
@@ -211,7 +215,7 @@ public class SmfsAPIWrapper {
         return SmfsIntegration.hasTamedGhostInNBT(player, ghostType);
     }
 
-    public static boolean registerTameableItem(PlayerEntity player, String ghostType,
+    public static boolean registerTameableItem(Player player, String ghostType,
                                                 int spiritBonus, int powerBonus, int damageBonus,
                                                 int resistanceBonus, int sanityBonus, double revivalFactor) {
         try {
@@ -221,17 +225,17 @@ public class SmfsAPIWrapper {
             Object apiInstance = getInstanceMethod.invoke(null);
 
             java.lang.reflect.Method setGhostSlotItemMethod = tameableItemAPIClass.getMethod(
-                "setGhostSlotItem", PlayerEntity.class, int.class, ItemStack.class);
+                "setGhostSlotItem", Player.class, int.class, ItemStack.class);
 
             for (int i = 0; i < 10; i++) {
                 java.lang.reflect.Method isGhostSlotOccupiedMethod = tameableItemAPIClass.getMethod(
-                    "isGhostSlotOccupied", PlayerEntity.class, int.class);
+                    "isGhostSlotOccupied", Player.class, int.class);
 
                 boolean occupied = (boolean) isGhostSlotOccupiedMethod.invoke(apiInstance, player, i);
 
                 if (!occupied) {
                     ItemStack ghostFurnaceFireStack = new ItemStack(
-                        net.minecraft.registry.Registries.ITEM.get(new Identifier("guiyu", "ghost_furnace_fire")));
+                        BuiltInRegistries.ITEM.get(new ResourceLocation("guiyu", "ghost_furnace_fire")));
                     setGhostSlotItemMethod.invoke(apiInstance, player, i, ghostFurnaceFireStack);
 
                     setGhostSlotAttributes(apiInstance, player, i, spiritBonus, powerBonus, damageBonus, resistanceBonus, revivalFactor);
@@ -251,27 +255,27 @@ public class SmfsAPIWrapper {
         }
     }
 
-    private static void setGhostSlotAttributes(Object apiInstance, PlayerEntity player, int slotIndex,
+    private static void setGhostSlotAttributes(Object apiInstance, Player player, int slotIndex,
                                               int spiritBonus, int powerBonus, int damageBonus, int resistanceBonus, double revivalFactor) {
         try {
             java.lang.reflect.Method setSpiritStrengthMethod = apiInstance.getClass().getMethod(
-                "setGhostSlotSpiritStrength", PlayerEntity.class, int.class, int.class);
+                "setGhostSlotSpiritStrength", Player.class, int.class, int.class);
             setSpiritStrengthMethod.invoke(apiInstance, player, slotIndex, spiritBonus);
 
             java.lang.reflect.Method setSpiritPowerMethod = apiInstance.getClass().getMethod(
-                "setGhostSlotSpiritPower", PlayerEntity.class, int.class, int.class);
+                "setGhostSlotSpiritPower", Player.class, int.class, int.class);
             setSpiritPowerMethod.invoke(apiInstance, player, slotIndex, powerBonus);
 
             java.lang.reflect.Method setSpiritDamageMethod = apiInstance.getClass().getMethod(
-                "setGhostSlotSpiritDamage", PlayerEntity.class, int.class, int.class);
+                "setGhostSlotSpiritDamage", Player.class, int.class, int.class);
             setSpiritDamageMethod.invoke(apiInstance, player, slotIndex, damageBonus);
 
             java.lang.reflect.Method setSpiritResistanceMethod = apiInstance.getClass().getMethod(
-                "setGhostSlotSpiritResistance", PlayerEntity.class, int.class, int.class);
+                "setGhostSlotSpiritResistance", Player.class, int.class, int.class);
             setSpiritResistanceMethod.invoke(apiInstance, player, slotIndex, resistanceBonus);
 
             java.lang.reflect.Method setRevivalFactorMethod = apiInstance.getClass().getMethod(
-                "setGhostSlotRevivalFactor", PlayerEntity.class, int.class, double.class);
+                "setGhostSlotRevivalFactor", Player.class, int.class, double.class);
             setRevivalFactorMethod.invoke(apiInstance, player, slotIndex, revivalFactor);
 
             LOGGER.debug("成功设置槽位{}的属性", slotIndex);
@@ -280,66 +284,66 @@ public class SmfsAPIWrapper {
         }
     }
 
-    public static boolean isGhostDomainActive(PlayerEntity player) {
+    public static boolean isGhostDomainActive(Player player) {
         return SmfsIntegration.isGhostDomainActive(player);
     }
 
-    public static boolean hasRedGhostDomain(PlayerEntity player) {
+    public static boolean hasRedGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.RedGhostDomainEffect") ||
                hasStatusEffect(player, "RED_GHOST_DOMAIN") ||
                hasStatusEffect(player, "RED_GHOST_DOMAIN_TARGET");
     }
 
-    public static boolean hasGreenGhostDomain(PlayerEntity player) {
+    public static boolean hasGreenGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.GreenGhostDomainEffect") ||
                hasStatusEffect(player, "GREEN_GHOST_DOMAIN") ||
                hasStatusEffect(player, "GREEN_GHOST_DOMAIN_TARGET");
     }
 
-    public static boolean hasBlueGhostDomain(PlayerEntity player) {
+    public static boolean hasBlueGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.BlueGhostDomainEffect") ||
                hasStatusEffect(player, "BLUE_GHOST_DOMAIN") ||
                hasStatusEffect(player, "BLUE_GHOST_DOMAIN_TARGET");
     }
 
-    public static boolean hasGrayGhostDomain(PlayerEntity player) {
+    public static boolean hasGrayGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.GrayGhostDomainEffect") ||
                hasStatusEffect(player, "GRAY_GHOST_DOMAIN") ||
                hasStatusEffect(player, "GRAY_GHOST_DOMAIN_TARGET");
     }
 
-    public static boolean hasGoldenGhostDomain(PlayerEntity player) {
+    public static boolean hasGoldenGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.GoldenGhostDomainEffect") ||
                hasStatusEffect(player, "GOLDEN_GHOST_DOMAIN") ||
                hasStatusEffect(player, "GOLDEN_GHOST_DOMAIN_TARGET");
     }
 
-    public static boolean hasPurpleGhostDomain(PlayerEntity player) {
+    public static boolean hasPurpleGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.PurpleGhostDomainEffect") ||
                hasStatusEffect(player, "PURPLE_GHOST_DOMAIN") ||
                hasStatusEffect(player, "PURPLE_GHOST_DOMAIN_TARGET") ||
                hasStatusEffect(player, "PURPLE_GHOST_DOMAIN_VISUAL");
     }
 
-    public static boolean hasBlackGhostDomain(PlayerEntity player) {
+    public static boolean hasBlackGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.BlackGhostDomainEffect") ||
                hasStatusEffect(player, "BLACK_GHOST_DOMAIN") ||
                hasStatusEffect(player, "BLACK_GHOST_DOMAIN_TARGET");
     }
 
-    public static boolean hasCyanGhostDomain(PlayerEntity player) {
+    public static boolean hasCyanGhostDomain(Player player) {
         return hasStatusEffect(player, "com.xie.smfs.effect.CyanGhostDomainEffect") ||
                hasStatusEffect(player, "CYAN_GHOST_DOMAIN") ||
                hasStatusEffect(player, "CYAN_GHOST_DOMAIN_TARGET");
     }
 
-    private static boolean hasStatusEffect(PlayerEntity player, String effectName) {
+    private static boolean hasStatusEffect(Player player, String effectName) {
         if (player == null || !isSmfsLoaded()) {
             return false;
         }
 
         try {
-            net.minecraft.registry.Registries.STATUS_EFFECT.getIds().forEach(id -> {
+            BuiltInRegistries.MOB_EFFECT.keySet().forEach(id -> {
                 if (id.getPath().equalsIgnoreCase(effectName) ||
                     id.getPath().toLowerCase().contains(effectName.toLowerCase())) {
                 }
@@ -365,8 +369,8 @@ public class SmfsAPIWrapper {
 
             if (field != null) {
                 Object effect = field.get(null);
-                if (effect instanceof net.minecraft.entity.effect.StatusEffect) {
-                    return player.hasStatusEffect((net.minecraft.entity.effect.StatusEffect) effect);
+                if (effect instanceof MobEffect) {
+                    return player.hasEffect((MobEffect) effect);
                 }
             }
         } catch (Exception e) {
@@ -376,19 +380,19 @@ public class SmfsAPIWrapper {
         return false;
     }
 
-    public static int getGhostDomainLevel(PlayerEntity player) {
+    public static int getGhostDomainLevel(Player player) {
         return SmfsIntegration.getGhostDomainLevel(player);
     }
 
-    public static int getGhostEyeLevel(PlayerEntity player) {
+    public static int getGhostEyeLevel(Player player) {
         return SmfsIntegration.getGhostEyeLevel(player);
     }
 
     public static void dealSpiritDamage(LivingEntity target, float amount, LivingEntity attacker) {
-        World world = target.getWorld();
+        Level world = target.level();
         DamageSource source = getGhostDamageSource(world);
 
-        if (target instanceof PlayerEntity targetPlayer) {
+        if (target instanceof Player targetPlayer) {
             handleSpiritDamage(targetPlayer, amount, amount, source);
         } else {
             try {
@@ -407,7 +411,7 @@ public class SmfsAPIWrapper {
                 }
             } catch (ClassNotFoundException ignored) {}
 
-            target.damage(source, amount);
+            target.hurt(source, amount);
         }
     }
 
@@ -441,7 +445,7 @@ public class SmfsAPIWrapper {
             }
         } catch (Exception e) {
             LOGGER.warn("处理鬼实体灵异伤害失败: {}", e.getMessage());
-            target.damage(getGhostDamageSource(target.getWorld()), amount);
+            target.hurt(getGhostDamageSource(target.level()), amount);
         }
     }
 
@@ -462,20 +466,20 @@ public class SmfsAPIWrapper {
             java.lang.reflect.Method setMethod = threadLocal.getClass().getMethod("set", Boolean.TYPE);
             setMethod.invoke(threadLocal, true);
             try {
-                target.damage(source, actual);
+                target.hurt(source, actual);
             } finally {
                 setMethod.invoke(threadLocal, false);
             }
         } catch (Exception e) {
             LOGGER.warn("处理驭鬼者NPC灵异伤害失败: {}", e.getMessage());
-            target.damage(source, amount);
+            target.hurt(source, amount);
         }
     }
 
-    public static void handleSpiritDamage(PlayerEntity target, float spiritDamageAmount, float baseAmount, DamageSource source) {
+    public static void handleSpiritDamage(Player target, float spiritDamageAmount, float baseAmount, DamageSource source) {
         if (!isSmfsLoaded()) {
             // 如果神秘复苏未加载，直接造成伤害
-            target.damage(source, spiritDamageAmount);
+            target.hurt(source, spiritDamageAmount);
             return;
         }
 
@@ -483,10 +487,10 @@ public class SmfsAPIWrapper {
             Class<?> playerEventsClass = Class.forName("com.xie.smfs.common.events.PlayerEvents");
             java.lang.reflect.Method handleSpiritDamageMethod = playerEventsClass.getMethod(
                 "handleSpiritDamage",
-                PlayerEntity.class,
+                Player.class,
                 float.class,
                 float.class,
-                net.minecraft.entity.damage.DamageSource.class
+                DamageSource.class
             );
             handleSpiritDamageMethod.invoke(null, target, spiritDamageAmount, baseAmount, source);
 
@@ -494,7 +498,7 @@ public class SmfsAPIWrapper {
         } catch (Exception e) {
             LOGGER.warn("调用handleSpiritDamage失败: {}", e.getMessage());
             // 备用方案：直接造成伤害
-            target.damage(source, spiritDamageAmount);
+            target.hurt(source, spiritDamageAmount);
         }
     }
 }

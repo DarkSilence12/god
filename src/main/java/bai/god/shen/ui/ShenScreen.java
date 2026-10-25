@@ -1,14 +1,20 @@
 package bai.god.shen.ui;
 
 import bai.god.shen.*;
-import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,7 +27,7 @@ public class ShenScreen extends Screen {
     private int selectedIndex = -1;
     private boolean loaded = false;
     private boolean renaming = false;
-    private TextFieldWidget nameField;
+    private EditBox nameField;
 
     private int layout_rightX, layout_btnW, layout_sectionY, layout_presetEndY;
     private int layout_rightPanelW;
@@ -29,7 +35,7 @@ public class ShenScreen extends Screen {
     /** 游戏内导出缓冲区：兜底系统剪贴板不可用时使用 */
     private static String lastExportedJson = null;
     private static String lastExportedName = null;
-    private static final File EXPORT_CACHE_FILE = FabricLoader.getInstance().getConfigDir()
+    private static final File EXPORT_CACHE_FILE = FMLPaths.CONFIGDIR.get()
             .resolve("god").resolve("last_export.json").toFile();
 
     static {
@@ -90,7 +96,7 @@ public class ShenScreen extends Screen {
     }
 
     public ShenScreen(boolean limited) {
-        super(Text.literal("言出法随" + (limited ? "（阉割）" : "")));
+        super(Component.literal("言出法随" + (limited ? "（阉割）" : "")));
         this.laws = new ArrayList<>();
         this.limited = limited;
     }
@@ -98,7 +104,7 @@ public class ShenScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-        clearChildren();
+        clearWidgets();
 
         int sw = this.width;
         int sh = this.height;
@@ -122,10 +128,10 @@ public class ShenScreen extends Screen {
             if (isNarrow && label.length() > 6) {
                 label = label.substring(0, Math.min(5, presetBtnW / 10)) + "..";
             }
-            this.addDrawableChild(ButtonWidget.builder(
-                Text.literal(label),
+            this.addRenderableWidget(Button.builder(
+                Component.literal(label),
                 button -> applyPreset(p)
-            ).dimensions(btnX, presetBtnY, presetBtnW, 16).build());
+            ).bounds(btnX, presetBtnY, presetBtnW, 16).build());
             btnX += presetGap;
             if (btnX + presetGap > layout_rightX) {
                 btnX = 10;
@@ -161,98 +167,98 @@ public class ShenScreen extends Screen {
 
         if (limited) {
             if (currentY + btnH > maxBottomY) currentY = maxBottomY - btnH;
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("§b导出"), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal("§b导出"), button -> {
                 if (selectedIndex >= 0 && selectedIndex < laws.size()) {
                     String json = ShenNetwork.GSON.toJson(laws.get(selectedIndex));
                     lastExportedJson = json;
                     lastExportedName = laws.get(selectedIndex).name;
                     saveExportCache(json);
-                    if (this.client != null) {
-                        this.client.keyboard.setClipboard(json);
-                        if (this.client.player != null)
-                            this.client.player.sendMessage(
-                                Text.literal("§a[言出法随] §e已导出 §b" + laws.get(selectedIndex).name + " §e到剪贴板（同时已存入本地缓存）"), false);
+                    if (this.minecraft != null) {
+                        this.minecraft.keyboardHandler.setClipboard(json);
+                        if (this.minecraft.player != null)
+                            this.minecraft.player.sendSystemMessage(
+                                Component.literal("§a[言出法随] §e已导出 §b" + laws.get(selectedIndex).name + " §e到剪贴板（同时已存入本地缓存）"));
                     }
                 }
-            }).dimensions(rx, currentY, bw, btnH).build());
+            }).bounds(rx, currentY, bw, btnH).build());
             currentY += buttonStep;
 
             if (selectedIndex >= 0 && selectedIndex < laws.size()) {
                 if (currentY + btnH > maxBottomY) currentY = maxBottomY - btnH;
                 ShenLaw sel = laws.get(selectedIndex);
                 String lbl = sel.enabled ? "§c[禁用]" : "§a[启用]";
-                this.addDrawableChild(ButtonWidget.builder(Text.literal(lbl), button -> {
+                this.addRenderableWidget(Button.builder(Component.literal(lbl), button -> {
                     sel.enabled = !sel.enabled;
                     ShenNetwork.sendSaveLaw(sel);
                     init();
-                }).dimensions(rx, currentY, bw, btnH).build());
+                }).bounds(rx, currentY, bw, btnH).build());
                 currentY += buttonStep;
             }
 
             if (currentY + btnH > maxBottomY) currentY = maxBottomY - btnH;
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("§d导入"), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal("§d导入"), button -> {
                 importFromClipboard();
-            }).dimensions(rx, currentY, bw, btnH).build());
+            }).bounds(rx, currentY, bw, btnH).build());
             currentY += buttonStep;
 
             if (currentY + btnH > maxBottomY) {
                 currentY = maxBottomY - btnH;
             }
-            this.addDrawableChild(ButtonWidget.builder(Text.literal("§7关闭"), button -> {
-                this.close();
-            }).dimensions(rx, currentY, bw, btnH).build());
+            this.addRenderableWidget(Button.builder(Component.literal("§7关闭"), button -> {
+                this.onClose();
+            }).bounds(rx, currentY, bw, btnH).build());
             return;
         }
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§a+ 新建"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§a+ 新建"), button -> {
             ShenLaw law = new ShenLaw("新法则 " + (this.laws.size() + 1));
             ShenNetwork.sendSaveLaw(law);
-        }).dimensions(rx, currentY, bw, btnH).build());
+        }).bounds(rx, currentY, bw, btnH).build());
         currentY += buttonStep;
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§e编辑规则"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§e编辑规则"), button -> {
             if (selectedIndex >= 0 && selectedIndex < laws.size()) {
-                if (this.client != null && this.client.player != null)
-                    this.client.setScreen(new ShenRuleEditScreen(this, laws.get(selectedIndex)));
+                if (this.minecraft != null && this.minecraft.player != null)
+                    this.minecraft.setScreen(new ShenRuleEditScreen(this, laws.get(selectedIndex)));
             }
-        }).dimensions(rx, currentY, bw, btnH).build());
+        }).bounds(rx, currentY, bw, btnH).build());
         currentY += buttonStep;
 
         if (selectedIndex >= 0 && selectedIndex < laws.size()) {
             if (currentY + btnH > maxBottomY) return;
             ShenLaw sel = laws.get(selectedIndex);
             String lbl = sel.enabled ? "§c[禁用]" : "§a[启用]";
-            this.addDrawableChild(ButtonWidget.builder(Text.literal(lbl), button -> {
+            this.addRenderableWidget(Button.builder(Component.literal(lbl), button -> {
                 sel.enabled = !sel.enabled;
                 ShenNetwork.sendSaveLaw(sel);
                 init();
-            }).dimensions(rx, currentY, bw, btnH).build());
+            }).bounds(rx, currentY, bw, btnH).build());
             currentY += buttonStep;
         }
 
         if (selectedIndex >= 0 && selectedIndex < laws.size()) {
             if (currentY + btnH > maxBottomY) return;
             if (!renaming) {
-                this.addDrawableChild(ButtonWidget.builder(Text.literal("§d重命名"), button -> {
+                this.addRenderableWidget(Button.builder(Component.literal("§d重命名"), button -> {
                     renaming = true;
                     init();
-                }).dimensions(rx, currentY, bw, btnH).build());
+                }).bounds(rx, currentY, bw, btnH).build());
                 currentY += buttonStep;
             } else {
                 if (nameField == null) {
-                    nameField = new TextFieldWidget(this.textRenderer,
-                        rx, currentY, bw, btnH, Text.literal("新名称"));
-                    nameField.setText(laws.get(selectedIndex).name);
+                    nameField = new EditBox(this.font,
+                        rx, currentY, bw, btnH, Component.literal("新名称"));
+                    nameField.setValue(laws.get(selectedIndex).name);
                     nameField.setMaxLength(64);
                 }
                 nameField.setWidth(bw);
-                this.addDrawableChild(nameField);
+                this.addRenderableWidget(nameField);
                 currentY += btnH + 2;
                 if (currentY + btnH <= maxBottomY) {
                     int hw = (bw - 2) / 2;
-                    this.addDrawableChild(ButtonWidget.builder(Text.literal("§a✓"), button -> {
+                    this.addRenderableWidget(Button.builder(Component.literal("§a✓"), button -> {
                         if (selectedIndex >= 0 && selectedIndex < laws.size()) {
-                            String nn = nameField.getText().trim();
+                            String nn = nameField.getValue().trim();
                             if (!nn.isEmpty()) {
                                 ShenLaw l = laws.get(selectedIndex);
                                 if (!l.name.equals(nn)) {
@@ -263,10 +269,10 @@ public class ShenScreen extends Screen {
                             }
                         }
                         renaming = false; nameField = null; init();
-                    }).dimensions(rx, currentY, hw, btnH).build());
-                    this.addDrawableChild(ButtonWidget.builder(Text.literal("§c✗"), button -> {
+                    }).bounds(rx, currentY, hw, btnH).build());
+                    this.addRenderableWidget(Button.builder(Component.literal("§c✗"), button -> {
                         renaming = false; nameField = null; init();
-                    }).dimensions(rx + hw + 2, currentY, hw, btnH).build());
+                    }).bounds(rx + hw + 2, currentY, hw, btnH).build());
                     currentY += buttonStep;
                 } else {
                     renaming = false; nameField = null;
@@ -275,50 +281,50 @@ public class ShenScreen extends Screen {
         }
 
         if (currentY + btnH > maxBottomY) return;
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§c删除"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§c删除"), button -> {
             if (selectedIndex >= 0 && selectedIndex < laws.size()) {
                 ShenNetwork.sendDeleteLaw(laws.get(selectedIndex).name);
                 laws.remove(selectedIndex);
                 selectedIndex = -1; renaming = false; nameField = null;
                 init();
             }
-        }).dimensions(rx, currentY, bw, btnH).build());
+        }).bounds(rx, currentY, bw, btnH).build());
         currentY += buttonStep;
 
         if (currentY + btnH > maxBottomY) return;
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§b导出"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§b导出"), button -> {
             if (selectedIndex >= 0 && selectedIndex < laws.size()) {
                 String json = ShenNetwork.GSON.toJson(laws.get(selectedIndex));
                 lastExportedJson = json;
                 lastExportedName = laws.get(selectedIndex).name;
                 saveExportCache(json);
-                if (this.client != null) {
-                    this.client.keyboard.setClipboard(json);
-                    if (this.client.player != null)
-                        this.client.player.sendMessage(
-                            Text.literal("§a[言出法随] §e已导出 §b" + laws.get(selectedIndex).name + " §e到剪贴板（同时已存入本地缓存）"), false);
+                if (this.minecraft != null) {
+                    this.minecraft.keyboardHandler.setClipboard(json);
+                    if (this.minecraft.player != null)
+                        this.minecraft.player.sendSystemMessage(
+                            Component.literal("§a[言出法随] §e已导出 §b" + laws.get(selectedIndex).name + " §e到剪贴板（同时已存入本地缓存）"));
                 }
             }
-        }).dimensions(rx, currentY, bw, btnH).build());
+        }).bounds(rx, currentY, bw, btnH).build());
         currentY += buttonStep;
 
         if (currentY + btnH > maxBottomY) return;
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§d导入"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§d导入"), button -> {
             importFromClipboard();
-        }).dimensions(rx, currentY, bw, btnH).build());
+        }).bounds(rx, currentY, bw, btnH).build());
         currentY += buttonStep;
 
         if (currentY + btnH > maxBottomY) {
             currentY = maxBottomY - btnH;
         }
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§7关闭"), button -> {
-            this.close();
-        }).dimensions(rx, currentY, bw, btnH).build());
+        this.addRenderableWidget(Button.builder(Component.literal("§7关闭"), button -> {
+            this.onClose();
+        }).bounds(rx, currentY, bw, btnH).build());
     }
 
     private void importFromClipboard() {
-        if (this.client != null) {
-            this.client.setScreen(new ShenImportScreen(this));
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(new ShenImportScreen(this));
         }
     }
 
@@ -329,22 +335,22 @@ public class ShenScreen extends Screen {
         tempLaw.addRule(rule);
         ShenNetwork.sendSaveLaw(tempLaw);
         if (limited) {
-            if (this.client != null && this.client.player != null)
-                this.client.player.sendMessage(
-                    Text.literal("§a[言出法随] §e已添加推荐模板 §b" + preset.displayName + " §e到我的法则"), false);
-        } else if (this.client != null && this.client.player != null) {
-            this.client.setScreen(new ShenRuleEditScreen(this, tempLaw));
+            if (this.minecraft != null && this.minecraft.player != null)
+                this.minecraft.player.sendSystemMessage(
+                    Component.literal("§a[言出法随] §e已添加推荐模板 §b" + preset.displayName + " §e到我的法则"));
+        } else if (this.minecraft != null && this.minecraft.player != null) {
+            this.minecraft.setScreen(new ShenRuleEditScreen(this, tempLaw));
         }
     }
 
     public void onSyncLaws(List<ShenLaw> syncedLaws) {
         this.laws = new ArrayList<>(syncedLaws);
         this.selectedIndex = -1;
-        if (this.client != null) this.init();
+        if (this.minecraft != null) this.init();
     }
 
     @Override
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics ctx, int mouseX, int mouseY, float delta) {
         this.renderBackground(ctx);
         super.render(ctx, mouseX, mouseY, delta);
 
@@ -353,15 +359,15 @@ public class ShenScreen extends Screen {
         int listBottom = this.height - 35;
         int rowH = 14;
 
-        ctx.drawCenteredTextWithShadow(this.textRenderer, this.title, sw / 2, 10, 0xFFFFFF);
+        ctx.drawCenteredString(this.font, this.title, sw / 2, 10, 0xFFFFFF);
 
-        ctx.drawCenteredTextWithShadow(this.textRenderer,
-            Text.literal("§6✦ 推荐模板 ✦"), sw / 2, 28, 0xFFAA00);
+        ctx.drawCenteredString(this.font,
+            Component.literal("§6✦ 推荐模板 ✦"), sw / 2, 28, 0xFFAA00);
 
         int titleY = layout_sectionY - 12;
         String sectionTitle = (sw < 350) ? "§e我的法则" : "§e── 我的法则 ──";
-        ctx.drawCenteredTextWithShadow(this.textRenderer,
-            Text.literal(sectionTitle), sw / 2, titleY, 0xFFAA00);
+        ctx.drawCenteredString(this.font,
+            Component.literal(sectionTitle), sw / 2, titleY, 0xFFAA00);
 
         int y = listTop;
         int listRight = layout_rightX - 5;
@@ -392,8 +398,8 @@ public class ShenScreen extends Screen {
                 String shortName = law.name.substring(0, Math.min(6, textAvailableWidth / 8)) + "..";
                 fullText = highlight + status + " " + shortName + " §7(" + law.rules.size() + "条)";
             }
-            ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(fullText),
+            ctx.drawString(this.font,
+                Component.literal(fullText),
                 12, y + 2, textColor);
             y += rowH;
         }
@@ -406,8 +412,8 @@ public class ShenScreen extends Screen {
             if (sw < 300 && sel.name.length() > 6) {
                 statusText = "§7" + sel.name.substring(0, Math.min(5, textAvailableWidth / 8)) + ".. " + st;
             }
-            ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(statusText),
+            ctx.drawString(this.font,
+                Component.literal(statusText),
                 10, statusY, 0xCCCCCC);
         }
     }

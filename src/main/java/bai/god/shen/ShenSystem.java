@@ -1,6 +1,6 @@
 package bai.god.shen;
 
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,11 +28,11 @@ public class ShenSystem {
     /**
      * 言出法随对全部玩家开放，不再依赖鬼域模组的权限体系。
      */
-    public static boolean canUseShen(ServerPlayerEntity player) {
+    public static boolean canUseShen(ServerPlayer player) {
         return player != null;
     }
 
-    public static void loadPlayerLaws(ServerPlayerEntity player) {
+    public static void loadPlayerLaws(ServerPlayer player) {
         if (!canUseShen(player)) return;
         List<ShenLaw> laws = ShenDataManager.loadLaws(player);
         for (ShenLaw law : laws) {
@@ -40,7 +40,7 @@ public class ShenSystem {
         }
     }
 
-    public static void unloadPlayerLaws(ServerPlayerEntity player) {
+    public static void unloadPlayerLaws(ServerPlayer player) {
         List<ShenLaw> laws = ShenDataManager.loadLaws(player);
         for (ShenLaw law : laws) {
             ShenEventBus.unregisterLaw(law);

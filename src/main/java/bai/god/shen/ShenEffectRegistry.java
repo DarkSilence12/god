@@ -1,44 +1,60 @@
 package bai.god.shen;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.StringNbtReader;
-import net.minecraft.particle.DustParticleEffect;
-import net.minecraft.particle.ParticleEffect;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.registry.Registries;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
 import bai.god.support.ForceTeleportHelper;
 import bai.god.support.smfs.SmfsAPIWrapper;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageType;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageType;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
-import net.minecraft.world.GameRules;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
 public class ShenEffectRegistry {
     private static final Map<ShenEffectType, BiConsumer<ShenEvent, List<LivingEntity>>> EXECUTORS = new HashMap<>();
+
+    /** 判断实体是否处于无敌状态（供伤害/死亡事件拦截查询；状态持久化于存档） */
+    public static boolean isInvincible(Entity entity) {
+        if (entity == null) return false;
+        if (!(entity.level() instanceof ServerLevel serverLevel)) return false;
+        return ShenInvincibleStore.get(serverLevel).contains(entity.getUUID());
+    }
 
     static {
         EXECUTORS.put(ShenEffectType.MODIFY_HEALTH, ShenEffectRegistry::executeModifyHealth);
@@ -83,6 +99,7 @@ public class ShenEffectRegistry {
         EXECUTORS.put(ShenEffectType.REPAIR_ITEM, ShenEffectRegistry::executeRepairItem);
         EXECUTORS.put(ShenEffectType.SPAWN_LIGHTNING, ShenEffectRegistry::executeSpawnLightning);
         EXECUTORS.put(ShenEffectType.SET_INVISIBLE, ShenEffectRegistry::executeSetInvisible);
+        EXECUTORS.put(ShenEffectType.SET_INVINCIBLE, ShenEffectRegistry::executeSetInvincible);
         EXECUTORS.put(ShenEffectType.SATURATE_FOOD, ShenEffectRegistry::executeSaturateFood);
         EXECUTORS.put(ShenEffectType.SET_STEP_HEIGHT, ShenEffectRegistry::executeSetStepHeight);
         EXECUTORS.put(ShenEffectType.SET_RESISTANCE, ShenEffectRegistry::executeSetResistance);
@@ -93,6 +110,7 @@ public class ShenEffectRegistry {
         EXECUTORS.put(ShenEffectType.FREEZE_ENTITY, ShenEffectRegistry::executeFreezeEntity);
         EXECUTORS.put(ShenEffectType.PLACE_STRUCTURE, ShenEffectRegistry::executePlaceStructure);
         EXECUTORS.put(ShenEffectType.MASS_REPLACE_BLOCKS, ShenEffectRegistry::executeMassReplaceBlocks);
+        EXECUTORS.put(ShenEffectType.CLEAVE_LAND, ShenEffectRegistry::executeCleaveLand);
         EXECUTORS.put(ShenEffectType.MOD_ADAPTER_EFFECT, ShenEffectRegistry::executeModAdapterEffect);
 
         EXECUTORS.put(ShenEffectType.SMFS_SET_SPIRIT_RESISTANCE, ShenEffectRegistry::executeSmfsSetSpiritResistance);
@@ -148,11 +166,11 @@ public class ShenEffectRegistry {
             float finalAmount = percent ? target.getMaxHealth() * amount / 100f : amount;
 
             if ("max".equals(targetType)) {
-                net.minecraft.entity.attribute.EntityAttribute maxHealthAttr =
-                    net.minecraft.registry.Registries.ATTRIBUTE.get(
-                        net.minecraft.util.Identifier.tryParse("minecraft:generic.max_health"));
+                net.minecraft.world.entity.ai.attributes.Attribute maxHealthAttr =
+                    BuiltInRegistries.ATTRIBUTE.get(
+                        ResourceLocation.tryParse("minecraft:generic.max_health"));
                 if (maxHealthAttr != null) {
-                    net.minecraft.entity.attribute.EntityAttributeInstance attr = target.getAttributeInstance(maxHealthAttr);
+                    net.minecraft.world.entity.ai.attributes.AttributeInstance attr = target.getAttribute(maxHealthAttr);
                     if (attr != null) {
                         float clamped = Math.max(0, Math.min(finalAmount, 100000));
                         attr.setBaseValue(clamped);
@@ -172,8 +190,8 @@ public class ShenEffectRegistry {
         for (LivingEntity target : targets) {
             float amount = (float) rule.getParamDouble("amount", 10.0);
             String damageTypeId = rule.getParam("damageType", "minecraft:generic");
-            Identifier dtId = Identifier.tryParse(damageTypeId);
-            if (dtId == null) dtId = Identifier.of("minecraft", "generic");
+            ResourceLocation dtId = ResourceLocation.tryParse(damageTypeId);
+            if (dtId == null) dtId = new ResourceLocation("minecraft", "generic");
 
             if ("smfs:ghost".equals(dtId.toString())) {
                 LivingEntity attacker = event.source != null ? event.source : target;
@@ -182,13 +200,13 @@ public class ShenEffectRegistry {
             }
 
             try {
-                RegistryKey<DamageType> dtKey = RegistryKey.of(RegistryKeys.DAMAGE_TYPE, dtId);
-                var registryEntry = ((net.minecraft.server.world.ServerWorld)target.getWorld())
-                    .getRegistryManager()
-                    .get(RegistryKeys.DAMAGE_TYPE)
-                    .entryOf(dtKey);
+                ResourceKey<DamageType> dtKey = ResourceKey.create(Registries.DAMAGE_TYPE, dtId);
+                var registryEntry = ((ServerLevel) target.level())
+                    .registryAccess()
+                    .registryOrThrow(Registries.DAMAGE_TYPE)
+                    .getHolderOrThrow(dtKey);
                 DamageSource source = new DamageSource(registryEntry, event.source, event.source);
-                target.damage(source, amount);
+                target.hurt(source, amount);
             } catch (Exception e) {
                 // 安全兜底 — 如果是灵异伤害兜底也走灵异通道
                 if ("smfs:ghost".equals(dtId.toString())) {
@@ -197,9 +215,9 @@ public class ShenEffectRegistry {
                     continue;
                 }
                 DamageSource fallback = (event.source != null)
-                    ? target.getDamageSources().mobAttack(event.source)
-                    : target.getDamageSources().generic();
-                target.damage(fallback, amount);
+                    ? target.damageSources().mobAttack(event.source)
+                    : target.damageSources().generic();
+                target.hurt(fallback, amount);
             }
         }
     }
@@ -211,18 +229,18 @@ public class ShenEffectRegistry {
         int amplifier = rule.getParamInt("amplifier", 0);
         boolean showParticles = rule.getParamBool("showParticles", true);
 
-        StatusEffect effect = Registries.STATUS_EFFECT.get(new Identifier(effectId));
+        MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(new ResourceLocation(effectId));
         if (effect == null) {
-            effect = Registries.STATUS_EFFECT.get(new Identifier("minecraft:glowing"));
+            effect = BuiltInRegistries.MOB_EFFECT.get(new ResourceLocation("minecraft:glowing"));
         }
         for (LivingEntity target : targets) {
-            target.addStatusEffect(new StatusEffectInstance(effect, duration, amplifier, false, showParticles));
+            target.addEffect(new MobEffectInstance(effect, duration, amplifier, false, showParticles));
         }
     }
 
     private static void executeClearEffect(ShenEvent event, List<LivingEntity> targets) {
         for (LivingEntity target : targets) {
-            target.clearStatusEffects();
+            target.removeAllEffects();
         }
     }
 
@@ -234,8 +252,8 @@ public class ShenEffectRegistry {
         String nbtType = rule.getParam("nbtType", "string");
 
         for (LivingEntity target : targets) {
-            NbtCompound nbt = new NbtCompound();
-            target.writeNbt(nbt);
+            CompoundTag nbt = new CompoundTag();
+            target.saveWithoutId(nbt);
 
             if (!nbtKey.isEmpty()) {
                 if ("delete".equals(nbtMode)) {
@@ -253,7 +271,7 @@ public class ShenEffectRegistry {
                             break;
                         case "compound":
                             try {
-                                NbtCompound parsed = StringNbtReader.parse(nbtValue);
+                                CompoundTag parsed = TagParser.parseTag(nbtValue);
                                 nbt.put(nbtKey, parsed);
                             } catch (Exception ignored) {}
                             break;
@@ -263,7 +281,7 @@ public class ShenEffectRegistry {
                     }
                 }
             }
-            target.readNbt(nbt);
+            target.load(nbt);
         }
     }
 
@@ -271,10 +289,10 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         boolean setAi = rule.getParamBool("ai", false);
         for (LivingEntity target : targets) {
-            NbtCompound nbt = new NbtCompound();
-            target.writeNbt(nbt);
+            CompoundTag nbt = new CompoundTag();
+            target.saveWithoutId(nbt);
             nbt.putBoolean("NoAI", !setAi);
-            target.readNbt(nbt);
+            target.load(nbt);
         }
     }
 
@@ -291,29 +309,29 @@ public class ShenEffectRegistry {
     }
 
     private static void executeSummonEntity(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         String entityTypeId = rule.getParam("entityType", "minecraft:lightning_bolt");
         int count = rule.getParamInt("count", 1);
 
-        EntityType<?> entityType = Registries.ENTITY_TYPE.get(new Identifier(entityTypeId));
+        EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(entityTypeId));
         if (entityType == null) return;
 
         for (LivingEntity target : targets) {
-            Vec3d centerPos = target.getPos();
+            Vec3 centerPos = target.position();
             for (int i = 0; i < count; i++) {
                 Entity entity = entityType.create(serverWorld);
                 if (entity == null) continue;
                 double offsetX = (serverWorld.random.nextDouble() - 0.5) * 2;
                 double offsetZ = (serverWorld.random.nextDouble() - 0.5) * 2;
                 entity.setPos(centerPos.x + offsetX, centerPos.y, centerPos.z + offsetZ);
-                serverWorld.spawnEntity(entity);
+                serverWorld.addFreshEntity(entity);
             }
         }
     }
 
     private static void executeTeleport(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         double x = rule.getParamDouble("x", 0);
         double y = rule.getParamDouble("y", 64);
@@ -322,11 +340,11 @@ public class ShenEffectRegistry {
         boolean switchDimension = rule.getParamBool("switchDimension", false);
         String dimensionId = rule.getParam("dimension", "minecraft:overworld");
 
-        ServerWorld targetWorld = serverWorld;
+        ServerLevel targetWorld = serverWorld;
         if (switchDimension && !dimensionId.isEmpty()) {
-            net.minecraft.registry.RegistryKey<net.minecraft.world.World> dimKey =
-                net.minecraft.registry.RegistryKey.of(net.minecraft.registry.RegistryKeys.WORLD, new Identifier(dimensionId));
-            net.minecraft.server.world.ServerWorld dimWorld = serverWorld.getServer().getWorld(dimKey);
+            ResourceKey<Level> dimKey =
+                ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimensionId));
+            ServerLevel dimWorld = serverWorld.getServer().getLevel(dimKey);
             if (dimWorld != null) {
                 targetWorld = dimWorld;
             }
@@ -336,12 +354,12 @@ public class ShenEffectRegistry {
             double tx = relative ? target.getX() + x : x;
             double ty = relative ? target.getY() + y : y;
             double tz = relative ? target.getZ() + z : z;
-            if (target instanceof ServerPlayerEntity player) {
+            if (target instanceof ServerPlayer player) {
                 ForceTeleportHelper.setForceTeleport(true);
-                player.teleport(targetWorld, tx, ty, tz, player.getYaw(), player.getPitch());
+                player.teleportTo(targetWorld, tx, ty, tz, player.getYRot(), player.getXRot());
                 ForceTeleportHelper.setForceTeleport(false);
             } else {
-                target.teleport(tx, ty, tz);
+                target.teleportTo(tx, ty, tz);
             }
         }
     }
@@ -349,13 +367,14 @@ public class ShenEffectRegistry {
     private static void executeSetFire(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         for (LivingEntity target : targets) {
-            int ticks = (int) rule.resolveNumber("ticks", 100, target.getFireTicks());
-            target.setOnFireFor(ticks);
+            int ticks = (int) rule.resolveNumber("ticks", 100, target.getRemainingFireTicks());
+            // 原 Fabric 的 setOnFireFor(ticks) 语义为“秒”，内部 *20；这里保持同等行为
+            target.setRemainingFireTicks(ticks * 20);
         }
     }
 
     private static void executeExplosion(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         float power = (float) rule.getParamDouble("power", 4.0);
         boolean destroyBlocks = rule.getParamBool("destroyBlocks", true);
@@ -363,19 +382,19 @@ public class ShenEffectRegistry {
         boolean atImpact = rule.getParamBool("atImpact", false);
 
         var explosionType = destroyBlocks
-            ? net.minecraft.world.World.ExplosionSourceType.TNT
-            : net.minecraft.world.World.ExplosionSourceType.NONE;
+            ? Level.ExplosionInteraction.TNT
+            : Level.ExplosionInteraction.NONE;
 
         if (atImpact) {
             BlockPos eventPos = event.pos;
-            serverWorld.createExplosion(event.source, eventPos.getX() + 0.5, eventPos.getY(), eventPos.getZ() + 0.5,
+            serverWorld.explode(event.source, eventPos.getX() + 0.5, eventPos.getY(), eventPos.getZ() + 0.5,
                 power, createFire, explosionType);
             return;
         }
 
         for (LivingEntity target : targets) {
-            Vec3d pos = target.getPos();
-            serverWorld.createExplosion(
+            Vec3 pos = target.position();
+            serverWorld.explode(
                 event.source, pos.x, pos.y, pos.z, power, createFire, explosionType);
         }
     }
@@ -386,16 +405,16 @@ public class ShenEffectRegistry {
         int count = rule.getParamInt("count", 1);
         String nbtStr = rule.getParam("itemNbt", "");
 
-        ItemStack stack = new ItemStack(Registries.ITEM.get(new Identifier(itemId)), count);
+        ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(new ResourceLocation(itemId)), count);
         if (!nbtStr.isEmpty()) {
             try {
-                stack.setNbt(StringNbtReader.parse(nbtStr));
+                stack.setTag(TagParser.parseTag(nbtStr));
             } catch (Exception ignored) {}
         }
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
-                player.getInventory().offerOrDrop(stack.copy());
+            if (target instanceof ServerPlayer player) {
+                player.getInventory().placeItemBackInInventory(stack.copy());
             }
         }
     }
@@ -406,16 +425,16 @@ public class ShenEffectRegistry {
         int count = rule.getParamInt("count", 1);
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
+            if (target instanceof ServerPlayer player) {
                 if (itemId.isEmpty()) {
-                    player.getMainHandStack().decrement(count);
+                    player.getMainHandItem().shrink(count);
                 } else {
-                    net.minecraft.item.Item targetItem = Registries.ITEM.get(new Identifier(itemId));
+                    net.minecraft.world.item.Item targetItem = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId));
                     if (targetItem != null) {
-                        for (int i = 0; i < player.getInventory().size(); i++) {
-                            ItemStack stack = player.getInventory().getStack(i);
-                            if (stack.isOf(targetItem)) {
-                                stack.decrement(count);
+                        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                            ItemStack stack = player.getInventory().getItem(i);
+                            if (stack.is(targetItem)) {
+                                stack.shrink(count);
                                 break;
                             }
                         }
@@ -432,10 +451,10 @@ public class ShenEffectRegistry {
         String nbtType = rule.getParam("nbtType", "string");
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
-                ItemStack stack = player.getMainHandStack();
+            if (target instanceof ServerPlayer player) {
+                ItemStack stack = player.getMainHandItem();
                 if (!stack.isEmpty() && !nbtKey.isEmpty()) {
-                    NbtCompound nbt = stack.getOrCreateNbt();
+                    CompoundTag nbt = stack.getOrCreateTag();
                     switch (nbtType) {
                         case "int":
                             try { nbt.putInt(nbtKey, Integer.parseInt(nbtValue)); } catch (NumberFormatException ignored) {}
@@ -447,7 +466,7 @@ public class ShenEffectRegistry {
                             nbt.putBoolean(nbtKey, "true".equalsIgnoreCase(nbtValue));
                             break;
                         case "compound":
-                            try { nbt.put(nbtKey, StringNbtReader.parse(nbtValue)); } catch (Exception ignored) {}
+                            try { nbt.put(nbtKey, TagParser.parseTag(nbtValue)); } catch (Exception ignored) {}
                             break;
                         default:
                             nbt.putString(nbtKey, nbtValue);
@@ -460,10 +479,10 @@ public class ShenEffectRegistry {
 
     private static void executeCopyItem(ShenEvent event, List<LivingEntity> targets) {
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
-                ItemStack stack = player.getMainHandStack().copy();
+            if (target instanceof ServerPlayer player) {
+                ItemStack stack = player.getMainHandItem().copy();
                 if (!stack.isEmpty()) {
-                    player.getInventory().offerOrDrop(stack);
+                    player.getInventory().placeItemBackInInventory(stack);
                 }
             }
         }
@@ -474,11 +493,11 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         String blockId = rule.getParam("block", "minecraft:stone");
 
-        net.minecraft.block.Block block = Registries.BLOCK.get(new Identifier(blockId));
-        if (block == null) block = Registries.BLOCK.get(new Identifier("minecraft:stone"));
+        Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId));
+        if (block == null) block = BuiltInRegistries.BLOCK.get(new ResourceLocation("minecraft:stone"));
 
         if (event.pos != null) {
-            event.world.setBlockState(event.pos, block.getDefaultState());
+            event.world.setBlock(event.pos, block.defaultBlockState(), 3);
         }
     }
 
@@ -486,7 +505,7 @@ public class ShenEffectRegistry {
         if (event.world != null && event.pos != null) {
             ShenRule rule = event.rule;
             boolean dropItems = rule.getParamBool("dropItems", true);
-            event.world.breakBlock(event.pos, dropItems);
+            event.world.destroyBlock(event.pos, dropItems);
         }
     }
 
@@ -495,68 +514,68 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         String blockId = rule.getParam("block", "minecraft:stone");
 
-        net.minecraft.block.Block block = Registries.BLOCK.get(new Identifier(blockId));
+        Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId));
         if (block != null) {
-            event.world.setBlockState(event.pos, block.getDefaultState());
+            event.world.setBlock(event.pos, block.defaultBlockState(), 3);
         }
     }
 
     private static void executeModifyTime(ShenEvent event, List<LivingEntity> targets) {
-        if (event.world instanceof ServerWorld serverWorld) {
+        if (event.world instanceof ServerLevel serverWorld) {
             ShenRule rule = event.rule;
             long time = (long) rule.getParamDouble("time", 1000);
             boolean absolute = rule.getParamBool("absolute", false);
             if (absolute) {
-                serverWorld.setTimeOfDay(time);
+                serverWorld.setDayTime(time);
             } else {
-                serverWorld.setTimeOfDay(serverWorld.getTimeOfDay() + time);
+                serverWorld.setDayTime(serverWorld.getDayTime() + time);
             }
         }
     }
 
     private static void executeModifyWeather(ShenEvent event, List<LivingEntity> targets) {
-        if (event.world instanceof ServerWorld serverWorld) {
+        if (event.world instanceof ServerLevel serverWorld) {
             ShenRule rule = event.rule;
             String weather = rule.getParam("weather", "clear");
             int duration = rule.getParamInt("duration", 6000);
 
             switch (weather) {
                 case "rain":
-                    serverWorld.setWeather(0, duration, true, false);
+                    serverWorld.setWeatherParameters(0, duration, true, false);
                     break;
                 case "thunder":
-                    serverWorld.setWeather(0, duration, true, true);
+                    serverWorld.setWeatherParameters(0, duration, true, true);
                     break;
                 default:
-                    serverWorld.setWeather(duration, 0, false, false);
+                    serverWorld.setWeatherParameters(duration, 0, false, false);
                     break;
             }
         }
     }
 
     private static void executeModifyGameRule(ShenEvent event, List<LivingEntity> targets) {
-        if (event.world instanceof ServerWorld serverWorld) {
+        if (event.world instanceof ServerLevel serverWorld) {
             ShenRule rule = event.rule;
             String gameRuleName = rule.getParam("gameRule", "doDaylightCycle");
             boolean value = rule.getParamBool("value", true);
 
             GameRules gameRules = serverWorld.getGameRules();
-            GameRules.accept(new GameRules.Visitor() {
+            GameRules.visitGameRuleTypes(new GameRules.GameRuleTypeVisitor() {
                 @Override
-                public void visitInt(GameRules.Key<GameRules.IntRule> key, GameRules.Type<GameRules.IntRule> type) {
-                    if (gameRuleName.equals(key.getName())) {
+                public void visitInteger(GameRules.Key<GameRules.IntegerValue> key, GameRules.Type<GameRules.IntegerValue> type) {
+                    if (gameRuleName.equals(key.getId())) {
                         if (value) {
-                            gameRules.get(key).set(1, serverWorld.getServer());
+                            gameRules.getRule(key).set(1, serverWorld.getServer());
                         } else {
-                            gameRules.get(key).set(0, serverWorld.getServer());
+                            gameRules.getRule(key).set(0, serverWorld.getServer());
                         }
                     }
                 }
 
                 @Override
-                public void visitBoolean(GameRules.Key<GameRules.BooleanRule> key, GameRules.Type<GameRules.BooleanRule> type) {
-                    if (gameRuleName.equals(key.getName())) {
-                        gameRules.get(key).set(value, serverWorld.getServer());
+                public void visitBoolean(GameRules.Key<GameRules.BooleanValue> key, GameRules.Type<GameRules.BooleanValue> type) {
+                    if (gameRuleName.equals(key.getId())) {
+                        gameRules.getRule(key).set(value, serverWorld.getServer());
                     }
                 }
             });
@@ -564,7 +583,7 @@ public class ShenEffectRegistry {
     }
 
     private static void executeSpawnParticle(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         String particleId = rule.getParam("particle", "minecraft:flame");
         int count = rule.getParamInt("count", 20);
@@ -589,25 +608,25 @@ public class ShenEffectRegistry {
         boolean hasCustomColor = (hasExplicitColor && !isDefaultColor)
             || (colorR != 255 || colorG != 0 || colorB != 0 || dustSize != 1.0);
 
-        ParticleEffect particle;
+        ParticleOptions particle;
 
         if (hasCustomColor) {
             float r = Math.min(1.0f, Math.max(0, colorR / 255.0f));
             float g = Math.min(1.0f, Math.max(0, colorG / 255.0f));
             float b = Math.min(1.0f, Math.max(0, colorB / 255.0f));
-            particle = new DustParticleEffect(new Vector3f(r, g, b), dustSize);
+            particle = new DustParticleOptions(new Vector3f(r, g, b), dustSize);
         } else {
             particle = ParticleTypes.FLAME;
             try {
-                Object raw = Registries.PARTICLE_TYPE.get(new Identifier(particleId));
-                if (raw instanceof ParticleEffect pe) {
+                Object raw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation(particleId));
+                if (raw instanceof ParticleOptions pe) {
                     particle = pe;
                 }
             } catch (Exception ignored) {}
         }
 
         for (LivingEntity target : targets) {
-            serverWorld.spawnParticles(particle,
+            serverWorld.sendParticles(particle,
                 target.getX(), target.getY() + 1, target.getZ(),
                 count, spread, spread, spread, 0.02);
         }
@@ -628,14 +647,14 @@ public class ShenEffectRegistry {
         float volume = (float) rule.getParamDouble("volume", 1.0);
         float pitch = (float) rule.getParamDouble("pitch", 1.0);
 
-        SoundEvent sound = Registries.SOUND_EVENT.get(new Identifier(soundId));
-        if (sound == null) sound = SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP;
+        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(new ResourceLocation(soundId));
+        if (sound == null) sound = SoundEvents.EXPERIENCE_ORB_PICKUP;
 
         if (event.pos != null) {
-            event.world.playSound(null, event.pos, sound, SoundCategory.PLAYERS, volume, pitch);
+            event.world.playSound(null, event.pos, sound, SoundSource.PLAYERS, volume, pitch);
         } else {
             for (LivingEntity target : targets) {
-                event.world.playSound(null, target.getBlockPos(), sound, SoundCategory.PLAYERS, volume, pitch);
+                event.world.playSound(null, target.blockPosition(), sound, SoundSource.PLAYERS, volume, pitch);
             }
         }
     }
@@ -647,39 +666,39 @@ public class ShenEffectRegistry {
 
         if (broadcastToAll) {
             if (event.world != null && event.world.getServer() != null) {
-                for (ServerPlayerEntity player : event.world.getServer().getPlayerManager().getPlayerList()) {
-                    player.sendMessage(Text.literal(message), false);
+                for (ServerPlayer player : event.world.getServer().getPlayerList().getPlayers()) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(message));
                 }
             }
         } else {
             for (LivingEntity target : targets) {
-                if (target instanceof ServerPlayerEntity player) {
-                    player.sendMessage(Text.literal(message), false);
+                if (target instanceof ServerPlayer player) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(message));
                 }
             }
         }
     }
 
     private static void executeCommand(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         String command = rule.getParam("command", "say 言出法随!");
         boolean executeForEach = rule.getParamBool("executeForEach", false);
 
-        ServerCommandSource baseSource = serverWorld.getServer().getCommandSource()
-            .withPosition(event.pos != null ? Vec3d.ofCenter(event.pos) : Vec3d.ZERO)
-            .withWorld(serverWorld);
+        CommandSourceStack baseSource = serverWorld.getServer().createCommandSourceStack()
+            .withPosition(event.pos != null ? Vec3.atCenterOf(event.pos) : Vec3.ZERO)
+            .withLevel(serverWorld);
 
         if (executeForEach) {
             for (LivingEntity target : targets) {
-                ServerCommandSource source = baseSource.withEntity(target);
-                serverWorld.getServer().getCommandManager().executeWithPrefix(source, command);
+                CommandSourceStack source = baseSource.withEntity(target);
+                serverWorld.getServer().getCommands().performPrefixedCommand(source, command);
             }
         } else {
             if (event.source != null) {
                 baseSource = baseSource.withEntity(event.source);
             }
-            serverWorld.getServer().getCommandManager().executeWithPrefix(baseSource, command);
+            serverWorld.getServer().getCommands().performPrefixedCommand(baseSource, command);
         }
     }
 
@@ -691,21 +710,21 @@ public class ShenEffectRegistry {
         int giveCount = rule.getParamInt("giveCount", 1);
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
+            if (target instanceof ServerPlayer player) {
                 if (!removeItemId.isEmpty()) {
-                    net.minecraft.item.Item removeItem = Registries.ITEM.get(new Identifier(removeItemId));
+                    net.minecraft.world.item.Item removeItem = BuiltInRegistries.ITEM.get(new ResourceLocation(removeItemId));
                     if (removeItem != null) {
-                        for (int i = 0; i < player.getInventory().size(); i++) {
-                            ItemStack stack = player.getInventory().getStack(i);
-                            if (stack.isOf(removeItem)) {
-                                stack.decrement(removeCount);
+                        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                            ItemStack stack = player.getInventory().getItem(i);
+                            if (stack.is(removeItem)) {
+                                stack.shrink(removeCount);
                                 break;
                             }
                         }
                     }
                 }
-                ItemStack giveStack = new ItemStack(Registries.ITEM.get(new Identifier(giveItemId)), giveCount);
-                player.getInventory().offerOrDrop(giveStack);
+                ItemStack giveStack = new ItemStack(BuiltInRegistries.ITEM.get(new ResourceLocation(giveItemId)), giveCount);
+                player.getInventory().placeItemBackInInventory(giveStack);
             }
         }
     }
@@ -715,26 +734,26 @@ public class ShenEffectRegistry {
         String enchantId = rule.getParam("enchantment", "minecraft:sharpness");
         int level = rule.getParamInt("level", 1);
 
-        net.minecraft.enchantment.Enchantment enchantment = Registries.ENCHANTMENT.get(new Identifier(enchantId));
+        net.minecraft.world.item.enchantment.Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(new ResourceLocation(enchantId));
         if (enchantment == null) return;
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
-                ItemStack stack = player.getMainHandStack();
+            if (target instanceof ServerPlayer player) {
+                ItemStack stack = player.getMainHandItem();
                 if (!stack.isEmpty()) {
-                    stack.addEnchantment(enchantment, level);
+                    stack.enchant(enchantment, level);
                 }
             }
         }
     }
 
     private static void executeSpawnExperience(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         int amount = rule.getParamInt("amount", 100);
 
         for (LivingEntity target : targets) {
-            net.minecraft.entity.ExperienceOrbEntity.spawn(serverWorld, target.getPos(), amount);
+            ExperienceOrb.award(serverWorld, target.position(), amount);
         }
     }
 
@@ -767,8 +786,8 @@ public class ShenEffectRegistry {
             store.setGlobal(varKey, varValue);
         } else {
             for (LivingEntity target : targets) {
-                if (target instanceof ServerPlayerEntity player) {
-                    store.setPlayer(player.getUuid(), varKey, varValue);
+                if (target instanceof ServerPlayer player) {
+                    store.setPlayer(player.getUUID(), varKey, varValue);
                 }
             }
         }
@@ -786,8 +805,8 @@ public class ShenEffectRegistry {
             store.modifyGlobal(varKey, amount);
         } else {
             for (LivingEntity target : targets) {
-                if (target instanceof ServerPlayerEntity player) {
-                    store.modifyPlayer(player.getUuid(), varKey, amount);
+                if (target instanceof ServerPlayer player) {
+                    store.modifyPlayer(player.getUUID(), varKey, amount);
                 }
             }
         }
@@ -798,18 +817,18 @@ public class ShenEffectRegistry {
         String modeName = rule.getParam("mode", "survival");
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
-                net.minecraft.world.GameMode mode = net.minecraft.world.GameMode.byName(modeName);
-                if (mode == null) mode = net.minecraft.world.GameMode.SURVIVAL;
-                player.changeGameMode(mode);
+            if (target instanceof ServerPlayer player) {
+                net.minecraft.world.level.GameType mode = net.minecraft.world.level.GameType.byName(modeName);
+                if (mode == null) mode = net.minecraft.world.level.GameType.SURVIVAL;
+                player.gameMode.changeGameModeForPlayer(mode);
             }
         }
     }
 
     private static void executeClearInventory(ShenEvent event, List<LivingEntity> targets) {
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
-                player.getInventory().clear();
+            if (target instanceof ServerPlayer player) {
+                player.getInventory().clearContent();
             }
         }
     }
@@ -820,14 +839,14 @@ public class ShenEffectRegistry {
         int maxCount = rule.getParamInt("maxCount", -1);
 
         for (LivingEntity target : targets) {
-            if (target instanceof ServerPlayerEntity player) {
+            if (target instanceof ServerPlayer player) {
                 int removed = 0;
-                for (int i = 0; i < player.getInventory().size(); i++) {
-                    ItemStack stack = player.getInventory().getStack(i);
+                for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+                    ItemStack stack = player.getInventory().getItem(i);
                     if (stack.getItem().toString().contains(itemId)) {
                         if (maxCount > 0 && removed >= maxCount) break;
                         int toRemove = Math.min(stack.getCount(), maxCount > 0 ? maxCount - removed : stack.getCount());
-                        stack.decrement(toRemove);
+                        stack.shrink(toRemove);
                         removed += toRemove;
                     }
                 }
@@ -860,9 +879,9 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         boolean canFly = rule.getParamBool("value", true);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.server.network.ServerPlayerEntity player) {
-                player.getAbilities().allowFlying = canFly;
-                player.sendAbilitiesUpdate();
+            if (target instanceof ServerPlayer player) {
+                player.getAbilities().mayfly = canFly;
+                player.onUpdateAbilities();
             }
         }
     }
@@ -870,11 +889,11 @@ public class ShenEffectRegistry {
     private static void executeSetWalkSpeed(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.server.network.ServerPlayerEntity player) {
-                float current = player.getAbilities().getWalkSpeed();
+            if (target instanceof ServerPlayer player) {
+                float current = player.getAbilities().getWalkingSpeed();
                 float speed = (float) rule.resolveNumber("value", 0.1, current);
-                player.getAbilities().setWalkSpeed(speed);
-                player.sendAbilitiesUpdate();
+                player.getAbilities().setWalkingSpeed(speed);
+                player.onUpdateAbilities();
             }
         }
     }
@@ -882,22 +901,22 @@ public class ShenEffectRegistry {
     private static void executeSetFlySpeed(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.server.network.ServerPlayerEntity player) {
-                float current = player.getAbilities().getFlySpeed();
+            if (target instanceof ServerPlayer player) {
+                float current = player.getAbilities().getFlyingSpeed();
                 float speed = (float) rule.resolveNumber("value", 0.05, current);
-                player.getAbilities().setFlySpeed(speed);
-                player.sendAbilitiesUpdate();
+                player.getAbilities().setFlyingSpeed(speed);
+                player.onUpdateAbilities();
             }
         }
     }
 
     private static void executeModifyMaxHealth(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
-        net.minecraft.entity.attribute.EntityAttribute maxHealthAttr = net.minecraft.registry.Registries.ATTRIBUTE.get(
-            net.minecraft.util.Identifier.tryParse("minecraft:generic.max_health"));
+        net.minecraft.world.entity.ai.attributes.Attribute maxHealthAttr = BuiltInRegistries.ATTRIBUTE.get(
+            ResourceLocation.tryParse("minecraft:generic.max_health"));
         if (maxHealthAttr == null) return;
         for (LivingEntity target : targets) {
-            net.minecraft.entity.attribute.EntityAttributeInstance attr = target.getAttributeInstance(maxHealthAttr);
+            net.minecraft.world.entity.ai.attributes.AttributeInstance attr = target.getAttribute(maxHealthAttr);
             if (attr == null) continue;
             double currentBase = attr.getBaseValue();
             double newBase = rule.resolveNumber("amount", 40.0, currentBase);
@@ -916,13 +935,13 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         int damage = rule.getParamInt("damage", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
-                net.minecraft.item.ItemStack stack = player.getMainHandStack();
+            if (target instanceof Player player) {
+                ItemStack stack = player.getMainHandItem();
                 if (!stack.isEmpty()) {
                     if (damage <= 0) {
-                        stack.setDamage(0);
+                        stack.setDamageValue(0);
                     } else {
-                        stack.setDamage(Math.max(0, stack.getDamage() - damage));
+                        stack.setDamageValue(Math.max(0, stack.getDamageValue() - damage));
                     }
                 }
             }
@@ -934,14 +953,14 @@ public class ShenEffectRegistry {
         boolean effectOnly = rule.getParamBool("effectOnly", false);
         if (event.world == null) return;
         for (LivingEntity target : targets) {
-            net.minecraft.entity.LightningEntity lightning =
-                net.minecraft.entity.EntityType.LIGHTNING_BOLT.create(event.world);
+            LightningBolt lightning =
+                EntityType.LIGHTNING_BOLT.create(event.world);
             if (lightning != null) {
-                lightning.setPosition(target.getX(), target.getY(), target.getZ());
+                lightning.setPos(target.getX(), target.getY(), target.getZ());
                 if (effectOnly) {
-                    lightning.setCosmetic(true);
+                    lightning.setVisualOnly(true);
                 }
-                event.world.spawnEntity(lightning);
+                event.world.addFreshEntity(lightning);
             }
         }
     }
@@ -954,13 +973,27 @@ public class ShenEffectRegistry {
         }
     }
 
+    private static void executeSetInvincible(ShenEvent event, List<LivingEntity> targets) {
+        ShenRule rule = event.rule;
+        boolean invincible = rule.getParamBool("value", true);
+        if (!(event.world instanceof ServerLevel serverLevel)) return;
+        ShenInvincibleStore store = ShenInvincibleStore.get(serverLevel);
+        for (LivingEntity target : targets) {
+            if (invincible) {
+                store.add(target.getUUID());
+            } else {
+                store.remove(target.getUUID());
+            }
+        }
+    }
+
     private static void executeSaturateFood(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         int food = rule.getParamInt("food", 20);
         float saturation = (float) rule.getParamDouble("saturation", 5.0f);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
-                player.getHungerManager().add(food, saturation);
+            if (target instanceof Player player) {
+                player.getFoodData().eat(food, saturation);
             }
         }
     }
@@ -968,11 +1001,11 @@ public class ShenEffectRegistry {
     private static void executeSetStepHeight(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         for (LivingEntity target : targets) {
-            net.minecraft.nbt.NbtCompound nbt = target.writeNbt(new net.minecraft.nbt.NbtCompound());
+            CompoundTag nbt = target.saveWithoutId(new CompoundTag());
             float current = nbt.contains("StepHeight") ? nbt.getFloat("StepHeight") : 0.6f;
             double height = rule.resolveNumber("height", 1.0, current);
             nbt.putFloat("StepHeight", (float) Math.max(0, height));
-            target.readNbt(nbt);
+            target.load(nbt);
         }
     }
 
@@ -981,21 +1014,21 @@ public class ShenEffectRegistry {
         int amplifier = rule.getParamInt("amplifier", 0);
         int duration = rule.getParamInt("duration", 200);
         for (LivingEntity target : targets) {
-            net.minecraft.entity.effect.StatusEffect resistance = net.minecraft.registry.Registries.STATUS_EFFECT.get(
-                net.minecraft.util.Identifier.tryParse("minecraft:resistance"));
+            MobEffect resistance = BuiltInRegistries.MOB_EFFECT.get(
+                ResourceLocation.tryParse("minecraft:resistance"));
             if (resistance != null) {
-                target.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(resistance, duration, amplifier));
+                target.addEffect(new MobEffectInstance(resistance, duration, amplifier));
             }
         }
     }
 
     private static void executeSwapHandItems(ShenEvent event, List<LivingEntity> targets) {
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
-                net.minecraft.item.ItemStack main = player.getMainHandStack();
-                net.minecraft.item.ItemStack off = player.getOffHandStack();
-                player.getInventory().main.set(player.getInventory().selectedSlot, off);
-                player.getInventory().offHand.set(0, main);
+            if (target instanceof Player player) {
+                ItemStack main = player.getMainHandItem();
+                ItemStack off = player.getOffhandItem();
+                player.getInventory().items.set(player.getInventory().selected, off);
+                player.getInventory().offhand.set(0, main);
             }
         }
     }
@@ -1009,28 +1042,28 @@ public class ShenEffectRegistry {
             double x = target.getX() + (rand.nextDouble() - 0.5) * range * 2;
             double z = target.getZ() + (rand.nextDouble() - 0.5) * range * 2;
             double y = target.getY();
-            net.minecraft.util.math.BlockPos tpPos = net.minecraft.util.math.BlockPos.ofFloored(x, y, z);
-            tpPos = event.world.getTopPosition(net.minecraft.world.Heightmap.Type.WORLD_SURFACE, tpPos);
-            target.teleport(tpPos.getX() + 0.5, tpPos.getY(), tpPos.getZ() + 0.5);
+            BlockPos tpPos = BlockPos.containing(x, y, z);
+            tpPos = event.world.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, tpPos);
+            target.teleportTo(tpPos.getX() + 0.5, tpPos.getY(), tpPos.getZ() + 0.5);
         }
     }
 
     private static void executeSetAir(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         for (LivingEntity target : targets) {
-            int air = (int) rule.resolveNumber("air", 300, target.getAir());
-            target.setAir(Math.max(0, Math.min(300, air)));
+            int air = (int) rule.resolveNumber("air", 300, target.getAirSupply());
+            target.setAirSupply(Math.max(0, Math.min(300, air)));
         }
     }
 
     private static void executeModifyAttribute(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         String attrId = rule.getParam("attribute", "minecraft:generic.movement_speed");
-        net.minecraft.entity.attribute.EntityAttribute attr = net.minecraft.registry.Registries.ATTRIBUTE.get(
-            net.minecraft.util.Identifier.tryParse(attrId));
+        net.minecraft.world.entity.ai.attributes.Attribute attr = BuiltInRegistries.ATTRIBUTE.get(
+            ResourceLocation.tryParse(attrId));
         if (attr == null) return;
         for (LivingEntity target : targets) {
-            net.minecraft.entity.attribute.EntityAttributeInstance instance = target.getAttributeInstance(attr);
+            net.minecraft.world.entity.ai.attributes.AttributeInstance instance = target.getAttribute(attr);
             if (instance != null) {
                 double current = instance.getBaseValue();
                 double value = rule.resolveNumber("value", 0.1, current);
@@ -1042,56 +1075,56 @@ public class ShenEffectRegistry {
     private static void executeFreezeEntity(ShenEvent event, List<LivingEntity> targets) {
         ShenRule rule = event.rule;
         for (LivingEntity target : targets) {
-            int ticks = (int) rule.resolveNumber("ticks", 100, target.getFrozenTicks());
-            target.setFrozenTicks(ticks);
+            int ticks = (int) rule.resolveNumber("ticks", 100, target.getTicksFrozen());
+            target.setTicksFrozen(ticks);
         }
     }
 
     private static void executePlaceStructure(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         String structureId = rule.getParam("structureId", "minecraft:village_plains");
         boolean useTargetPos = rule.getParamBool("useTargetPos", true);
         boolean ignoreEntities = rule.getParamBool("ignoreEntities", true);
         int integrity = rule.getParamInt("integrity", 100);
-        long seed = rule.getParamInt("seed", (int)(serverWorld.getRandom().nextLong() & 0x7FFFFFFF));
+        long seed = rule.getParamInt("seed", (int) (serverWorld.random.nextLong() & 0x7FFFFFFF));
 
         for (LivingEntity target : targets) {
-            BlockPos placePos = useTargetPos ? target.getBlockPos() : event.pos;
-            if (placePos == null) placePos = BlockPos.ORIGIN;
+            BlockPos placePos = useTargetPos ? target.blockPosition() : event.pos;
+            if (placePos == null) placePos = BlockPos.ZERO;
 
             try {
-                net.minecraft.util.Identifier structId = net.minecraft.util.Identifier.tryParse(structureId);
+                ResourceLocation structId = ResourceLocation.tryParse(structureId);
                 if (structId == null) continue;
 
-                java.util.Optional<net.minecraft.structure.StructureTemplate> templateOpt =
-                    serverWorld.getStructureTemplateManager().getTemplate(structId);
+                java.util.Optional<net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate> templateOpt =
+                    serverWorld.getStructureManager().get(structId);
 
                 if (templateOpt.isPresent()) {
-                    net.minecraft.structure.StructureTemplate template = templateOpt.get();
-                    net.minecraft.structure.StructurePlacementData placementData =
-                        new net.minecraft.structure.StructurePlacementData()
+                    net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate template = templateOpt.get();
+                    net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings placementData =
+                        new net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings()
                             .setIgnoreEntities(ignoreEntities)
-                            .setPosition(new BlockPos(0, 0, 0));
+                            .setRotationPivot(new BlockPos(0, 0, 0));
 
-                    template.place(serverWorld, placePos, placePos, placementData,
-                        net.minecraft.util.math.random.Random.create(seed),
-                        net.minecraft.block.Block.NOTIFY_ALL);
+                    template.placeInWorld(serverWorld, placePos, placePos, placementData,
+                        net.minecraft.util.RandomSource.create(seed),
+                        Block.UPDATE_ALL);
                 } else {
                     String cmd = "place structure " + structureId + " " + placePos.getX() + " " + placePos.getY() + " " + placePos.getZ();
-                    serverWorld.getServer().getCommandManager().executeWithPrefix(
-                        serverWorld.getServer().getCommandSource().withSilent(), cmd);
+                    serverWorld.getServer().getCommands().performPrefixedCommand(
+                        serverWorld.getServer().createCommandSourceStack().withSuppressedOutput(), cmd);
                 }
             } catch (Exception e) {
-                if (event.source instanceof ServerPlayerEntity player) {
-                    player.sendMessage(Text.literal("§c放置结构失败: " + e.getMessage()), false);
+                if (event.source instanceof ServerPlayer player) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c放置结构失败: " + e.getMessage()));
                 }
             }
         }
     }
 
     private static void executeMassReplaceBlocks(ShenEvent event, List<LivingEntity> targets) {
-        if (!(event.world instanceof ServerWorld serverWorld)) return;
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
         ShenRule rule = event.rule;
         String sourceBlockId = rule.getParam("sourceBlock", "minecraft:stone");
         String targetBlockId = rule.getParam("targetBlock", "minecraft:air");
@@ -1101,19 +1134,23 @@ public class ShenEffectRegistry {
         String shape = rule.getParam("shape", "cube");
         boolean useTargetPos = rule.getParamBool("useTargetPos", true);
 
-        net.minecraft.block.Block sourceBlock = Registries.BLOCK.get(new Identifier(sourceBlockId));
-        net.minecraft.block.Block targetBlock = Registries.BLOCK.get(new Identifier(targetBlockId));
-        if (sourceBlock == null || targetBlock == null) return;
+        // "all" = 全部方块：区域内一切方块都替换为目标方块
+        boolean replaceAll = "all".equals(sourceBlockId) || "minecraft:all".equals(sourceBlockId);
+
+        Block sourceBlock = replaceAll ? null : BuiltInRegistries.BLOCK.get(new ResourceLocation(sourceBlockId));
+        Block targetBlock = BuiltInRegistries.BLOCK.get(new ResourceLocation(targetBlockId));
+        if (targetBlock == null) return;
+        if (!replaceAll && sourceBlock == null) return;
 
         for (LivingEntity target : targets) {
-            BlockPos center = useTargetPos ? target.getBlockPos() : event.pos;
-            if (center == null) center = BlockPos.ORIGIN;
+            BlockPos center = useTargetPos ? target.blockPosition() : event.pos;
+            if (center == null) center = BlockPos.ZERO;
             int count = 0;
 
             for (int dx = -radiusX; dx <= radiusX; dx++) {
                 for (int dy = -radiusY; dy <= radiusY; dy++) {
                     for (int dz = -radiusZ; dz <= radiusZ; dz++) {
-                        BlockPos checkPos = center.add(dx, dy, dz);
+                        BlockPos checkPos = center.offset(dx, dy, dz);
 
                         if ("sphere".equals(shape)) {
                             double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -1124,11 +1161,88 @@ public class ShenEffectRegistry {
                             if (dist > radiusX || Math.abs(dy) > radiusY) continue;
                         }
 
-                        if (serverWorld.getBlockState(checkPos).isOf(sourceBlock)) {
-                            serverWorld.setBlockState(checkPos, targetBlock.getDefaultState(), 3);
+                        if (replaceAll || serverWorld.getBlockState(checkPos).is(sourceBlock)) {
+                            serverWorld.setBlock(checkPos, targetBlock.defaultBlockState(), 3);
                             count++;
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /** 劈大陆：把目标格加入劈除区域（仅做世界边界检查，不做区块间保护——
+     *  输入多少格就劈多少格，未加载区块也会直接劈） */
+    private static void addRegionBlock(ServerLevel world, BlockPos base, int ox, int oy, int oz,
+                                       Set<BlockPos> region) {
+        BlockPos bp = base.offset(ox, oy, oz);
+        if (!world.isInWorldBounds(bp)) return;
+        region.add(bp);
+    }
+
+    private static void executeCleaveLand(ShenEvent event, List<LivingEntity> targets) {
+        if (!(event.world instanceof ServerLevel serverWorld)) return;
+        ShenRule rule = event.rule;
+        int length = Math.max(1, Math.min(640, rule.getParamInt("length", 5)));
+        int width = Math.max(1, Math.min(640, rule.getParamInt("width", 5)));
+        int depth = Math.max(1, Math.min(640, rule.getParamInt("depth", 5)));
+        double damage = rule.getParamDouble("damage", 5.0);
+        String damageTypeId = rule.getParam("damageType", "minecraft:generic");
+
+        for (LivingEntity target : targets) {
+            if (!(target.level() instanceof ServerLevel world)) continue;
+
+            // —— 方向：平视方向（任意角度），投影判定精确覆盖 ——
+            // 把每个候选格投影到"劈轴 u"与"垂直轴 v"：u∈(0..length]、v∈宽度带内的
+            // 格子全部覆盖。任意转头角度（含 5°/22.5°/30°…）都能劈正面前方，
+            // 斜向时相邻排格子全部纳入，无浮点漏格、无奇偶错位、无残留
+            Vec3 f = Vec3.directionFromRotation(0, target.getYRot()).normalize();
+            double fx = f.x, fz = f.z;
+            if (fx == 0 && fz == 0) fz = 1; // 兜底
+
+            BlockPos base = target.blockPosition();
+            int bx = base.getX(), bz = base.getZ();
+            double halfW = (width - 1) / 2.0;
+            int spanX = (int) Math.ceil(Math.abs(fx) * length + Math.abs(fz) * width) + 1;
+            int spanZ = (int) Math.ceil(Math.abs(fz) * length + Math.abs(fx) * width) + 1;
+
+            Set<BlockPos> region = new HashSet<>();
+            for (int x = bx - spanX; x <= bx + spanX; x++) {
+                for (int z = bz - spanZ; z <= bz + spanZ; z++) {
+                    double u = fx * (x - bx) + fz * (z - bz);
+                    if (u <= 0 || u > length + 0.5) continue;
+                    double v = -fz * (x - bx) + fx * (z - bz);
+                    if (v < -halfW - 0.5 || v > (width - 1 - halfW) + 0.5) continue;
+                    for (int k = 0; k < depth; k++) {
+                        addRegionBlock(world, base, x - bx, -k, z - bz, region);
+                    }
+                }
+            }
+
+            // 删除方块（劈开大地）：区域内一切方块替换为空气
+            for (BlockPos bp : region) {
+                world.setBlock(bp, Blocks.AIR.defaultBlockState(), 3);
+            }
+
+            // 造成伤害（伤害类型可自选；不伤及触发者本人）
+            if (damage > 0) {
+                ResourceLocation dtId = ResourceLocation.tryParse(damageTypeId);
+                if (dtId == null) dtId = new ResourceLocation("minecraft", "generic");
+                ResourceKey<DamageType> dtKey = ResourceKey.create(Registries.DAMAGE_TYPE, dtId);
+                var registryEntry = world.registryAccess()
+                    .registryOrThrow(Registries.DAMAGE_TYPE)
+                    .getHolderOrThrow(dtKey);
+                DamageSource source = new DamageSource(registryEntry, event.source, event.source);
+
+                Set<LivingEntity> hit = new HashSet<>();
+                for (BlockPos bp : region) {
+                    for (LivingEntity e : world.getEntitiesOfClass(LivingEntity.class, new AABB(bp))) {
+                        if (e == event.source) continue;
+                        hit.add(e);
+                    }
+                }
+                for (LivingEntity e : hit) {
+                    e.hurt(source, (float) damage);
                 }
             }
         }
@@ -1148,7 +1262,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         float value = (float) rule.getParamDouble("value", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setSpiritResistance(player, value);
             }
         }
@@ -1158,7 +1272,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         float value = (float) rule.getParamDouble("value", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setSpiritDamage(player, value);
             }
         }
@@ -1168,7 +1282,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         float value = (float) rule.getParamDouble("value", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setCurrentSpirit(player, value);
             }
         }
@@ -1178,7 +1292,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         float value = (float) rule.getParamDouble("value", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setMaxSpirit(player, value);
             }
         }
@@ -1188,7 +1302,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         float value = (float) rule.getParamDouble("value", 100);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setSanity(player, value);
             }
         }
@@ -1198,7 +1312,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         double value = rule.getParamDouble("value", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setRevivalFactor(player, value);
             }
         }
@@ -1208,7 +1322,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         int slotIndex = rule.getParamInt("slotIndex", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setMainGhostSlot(player, slotIndex);
             }
         }
@@ -1216,7 +1330,7 @@ public class ShenEffectRegistry {
 
     private static void executeSmfsCycleMainGhost(ShenEvent event, List<LivingEntity> targets) {
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.cycleMainGhost(player);
             }
         }
@@ -1228,7 +1342,7 @@ public class ShenEffectRegistry {
         double value = rule.getParamDouble("value", 0);
         if (key.isEmpty()) return;
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setNbtAttribute(player, key, value);
             }
         }
@@ -1238,7 +1352,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         boolean active = rule.getParamBool("value", true);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setGhostDomainActive(player, active);
             }
         }
@@ -1248,7 +1362,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         int color = rule.getParamInt("color", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setGhostDomainColor(player, color);
             }
         }
@@ -1258,7 +1372,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         int level = rule.getParamInt("level", 1);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setGhostDomainLevel(player, level);
             }
         }
@@ -1268,7 +1382,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         int level = rule.getParamInt("level", 1);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setGhostEyeLevel(player, level);
             }
         }
@@ -1278,7 +1392,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         boolean active = rule.getParamBool("value", true);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setGhostEyeActive(player, active);
             }
         }
@@ -1289,7 +1403,7 @@ public class ShenEffectRegistry {
         int slotIndex = rule.getParamInt("slotIndex", 0);
         boolean locked = rule.getParamBool("locked", true);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setSlotLocked(player, slotIndex, locked);
             }
         }
@@ -1299,7 +1413,7 @@ public class ShenEffectRegistry {
         ShenRule rule = event.rule;
         int slotIndex = rule.getParamInt("slotIndex", 0);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.clearSlot(player, slotIndex);
             }
         }
@@ -1310,7 +1424,7 @@ public class ShenEffectRegistry {
         int slotA = rule.getParamInt("slotA", 0);
         int slotB = rule.getParamInt("slotB", 1);
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.swapSlots(player, slotA, slotB);
             }
         }
@@ -1322,7 +1436,7 @@ public class ShenEffectRegistry {
         String ghostItemId = rule.getParam("ghostItemId", "");
         if (ghostItemId.isEmpty()) return;
         for (LivingEntity target : targets) {
-            if (target instanceof net.minecraft.entity.player.PlayerEntity player) {
+            if (target instanceof Player player) {
                 bai.god.shen.compat.smfs.SmfsIntegration.setGhostInSlot(player, slotIndex, ghostItemId);
             }
         }

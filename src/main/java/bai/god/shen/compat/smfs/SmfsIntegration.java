@@ -1,19 +1,27 @@
 package bai.god.shen.compat.smfs;
 
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -56,24 +64,24 @@ public class SmfsIntegration {
     private static int defaultExtraSlotCount = 1;
     public static int getTotalSlotCount() { return ORIGINAL_SLOT_COUNT + defaultExtraSlotCount; }
 
-    public static int getPlayerTotalSlotCount(PlayerEntity player) {
+    public static int getPlayerTotalSlotCount(Player player) {
         return ORIGINAL_SLOT_COUNT + getPlayerExtraSlotCount(player);
     }
 
-    public static int getPlayerExtraSlotCount(PlayerEntity player) {
+    public static int getPlayerExtraSlotCount(Player player) {
         if (!isSmfsLoaded() || player == null) return 0;
-        NbtCompound data = getPlayerData(player);
+        CompoundTag data = getPlayerData(player);
         if (data != null && data.contains("guiyu_extra_slot_count")) {
             return data.getInt("guiyu_extra_slot_count");
         }
         return 0;
     }
 
-    public static void addExtraSlotsToPlayer(PlayerEntity player, int count) {
+    public static void addExtraSlotsToPlayer(Player player, int count) {
         if (!isSmfsLoaded() || player == null) return;
         int current = getPlayerExtraSlotCount(player);
         int newCount = current + Math.max(1, count);
-        NbtCompound data = getPlayerData(player);
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.putInt("guiyu_extra_slot_count", newCount);
             savePlayerData(player, data);
@@ -89,25 +97,25 @@ public class SmfsIntegration {
             mainGhostManagerClass = Class.forName("com.xie.smfs.manager.MainGhostManager");
             ghostSkillManagerClass = Class.forName("com.xie.smfs.manager.GhostSkillManager");
 
-            getCachedDataMethod = findMethod(playerEventsClass, "getCachedData", PlayerEntity.class);
-            setSpiritAttributesMethod = findMethod(playerEventsClass, "setSpiritAttributes", PlayerEntity.class, NbtCompound.class);
-            getCurrentSpiritMethod = findMethod(playerEventsClass, "getCurrentSpirit", PlayerEntity.class);
-            setCurrentSpiritMethod = findMethod(playerEventsClass, "setCurrentSpirit", PlayerEntity.class, float.class);
-            getMaxSpiritMethod = findMethod(playerEventsClass, "getMaxSpirit", PlayerEntity.class);
-            setMaxSpiritMethod = findMethod(playerEventsClass, "setMaxSpirit", PlayerEntity.class, float.class);
-            getGhostSlotItemMethod = findMethod(playerEventsClass, "getGhostSlotItem", PlayerEntity.class, int.class);
-            isGhostSlotOccupiedMethod = findMethod(playerEventsClass, "isGhostSlotOccupied", PlayerEntity.class, int.class);
-            getGhostTypeInSlotMethod = findMethod(playerEventsClass, "getGhostTypeInSlot", PlayerEntity.class, int.class);
-            getGhostSlotLevelMethod = findMethod(playerEventsClass, "getGhostSlotLevel", PlayerEntity.class, int.class);
-            getUnlockedGhostSlotMethod = findMethod(playerEventsClass, "getUnlockedGhostSlot", PlayerEntity.class);
-            setGhostSlotDataMethod = findMethod(playerEventsClass, "setGhostSlotData", PlayerEntity.class, int.class, ItemStack.class);
-            countOccupiedGhostSlotsMethod = findMethod(playerEventsClass, "countOccupiedGhostSlots", PlayerEntity.class);
+            getCachedDataMethod = findMethod(playerEventsClass, "getCachedData", Player.class);
+            setSpiritAttributesMethod = findMethod(playerEventsClass, "setSpiritAttributes", Player.class, CompoundTag.class);
+            getCurrentSpiritMethod = findMethod(playerEventsClass, "getCurrentSpirit", Player.class);
+            setCurrentSpiritMethod = findMethod(playerEventsClass, "setCurrentSpirit", Player.class, float.class);
+            getMaxSpiritMethod = findMethod(playerEventsClass, "getMaxSpirit", Player.class);
+            setMaxSpiritMethod = findMethod(playerEventsClass, "setMaxSpirit", Player.class, float.class);
+            getGhostSlotItemMethod = findMethod(playerEventsClass, "getGhostSlotItem", Player.class, int.class);
+            isGhostSlotOccupiedMethod = findMethod(playerEventsClass, "isGhostSlotOccupied", Player.class, int.class);
+            getGhostTypeInSlotMethod = findMethod(playerEventsClass, "getGhostTypeInSlot", Player.class, int.class);
+            getGhostSlotLevelMethod = findMethod(playerEventsClass, "getGhostSlotLevel", Player.class, int.class);
+            getUnlockedGhostSlotMethod = findMethod(playerEventsClass, "getUnlockedGhostSlot", Player.class);
+            setGhostSlotDataMethod = findMethod(playerEventsClass, "setGhostSlotData", Player.class, int.class, ItemStack.class);
+            countOccupiedGhostSlotsMethod = findMethod(playerEventsClass, "countOccupiedGhostSlots", Player.class);
 
-            getMainGhostSlotMethod = findMethod(mainGhostManagerClass, "getMainGhostSlot", PlayerEntity.class);
-            setMainGhostSlotMethod = findMethod(mainGhostManagerClass, "setMainGhostSlot", PlayerEntity.class, int.class);
-            hasMainGhostMethod = findMethod(mainGhostManagerClass, "hasMainGhost", PlayerEntity.class);
-            getMainGhostNameMethod = findMethod(mainGhostManagerClass, "getMainGhostName", PlayerEntity.class);
-            getMainGhostLevelMethod = findMethod(mainGhostManagerClass, "getMainGhostLevel", PlayerEntity.class);
+            getMainGhostSlotMethod = findMethod(mainGhostManagerClass, "getMainGhostSlot", Player.class);
+            setMainGhostSlotMethod = findMethod(mainGhostManagerClass, "setMainGhostSlot", Player.class, int.class);
+            hasMainGhostMethod = findMethod(mainGhostManagerClass, "hasMainGhost", Player.class);
+            getMainGhostNameMethod = findMethod(mainGhostManagerClass, "getMainGhostName", Player.class);
+            getMainGhostLevelMethod = findMethod(mainGhostManagerClass, "getMainGhostLevel", Player.class);
 
             initialized = true;
             LOGGER.info("神秘复苏深度集成已初始化 (槽位扩容: {} → {})", ORIGINAL_SLOT_COUNT, getTotalSlotCount());
@@ -131,7 +139,7 @@ public class SmfsIntegration {
         return initialized && playerEventsClass != null;
     }
 
-    public static ItemStack getGhostSlotItem(PlayerEntity player, int slotIndex) {
+    public static ItemStack getGhostSlotItem(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return ItemStack.EMPTY;
         try {
             return (ItemStack) getGhostSlotItemMethod.invoke(null, player, slotIndex);
@@ -141,7 +149,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static boolean isSlotOccupied(PlayerEntity player, int slotIndex) {
+    public static boolean isSlotOccupied(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return false;
         try {
             return (boolean) isGhostSlotOccupiedMethod.invoke(null, player, slotIndex);
@@ -150,7 +158,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static String getGhostTypeInSlot(PlayerEntity player, int slotIndex) {
+    public static String getGhostTypeInSlot(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return null;
         try {
             return (String) getGhostTypeInSlotMethod.invoke(null, player, slotIndex);
@@ -159,7 +167,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static int getSlotLevel(PlayerEntity player, int slotIndex) {
+    public static int getSlotLevel(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return 0;
         try {
             return (int) getGhostSlotLevelMethod.invoke(null, player, slotIndex);
@@ -168,7 +176,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static int getFirstEmptySlot(PlayerEntity player) {
+    public static int getFirstEmptySlot(Player player) {
         if (!isSmfsLoaded() || player == null) return -1;
         try {
             return (int) getUnlockedGhostSlotMethod.invoke(null, player);
@@ -177,7 +185,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static boolean setSlotData(PlayerEntity player, int slotIndex, ItemStack item) {
+    public static boolean setSlotData(Player player, int slotIndex, ItemStack item) {
         if (!isSmfsLoaded() || player == null) return false;
         try {
             setGhostSlotDataMethod.invoke(null, player, slotIndex, item);
@@ -188,7 +196,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static int countOccupiedSlots(PlayerEntity player) {
+    public static int countOccupiedSlots(Player player) {
         if (!isSmfsLoaded() || player == null) return 0;
         try {
             return (int) countOccupiedGhostSlotsMethod.invoke(null, player);
@@ -197,7 +205,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static boolean hasGhostType(PlayerEntity player, String ghostTypeId) {
+    public static boolean hasGhostType(Player player, String ghostTypeId) {
         if (!isSmfsLoaded() || player == null) return false;
         int total = getPlayerTotalSlotCount(player);
         for (int i = 0; i < total; i++) {
@@ -211,20 +219,20 @@ public class SmfsIntegration {
         return slotIndex >= 0 && slotIndex < ORIGINAL_SLOT_COUNT;
     }
 
-    public static void addExtraSlot(PlayerEntity player) {
+    public static void addExtraSlot(Player player) {
         addExtraSlotsToPlayer(player, 1);
     }
 
-    public static NbtCompound getPlayerData(PlayerEntity player) {
-        if (!isSmfsLoaded() || player == null) return new NbtCompound();
+    public static CompoundTag getPlayerData(Player player) {
+        if (!isSmfsLoaded() || player == null) return new CompoundTag();
         try {
-            return (NbtCompound) getCachedDataMethod.invoke(null, player);
+            return (CompoundTag) getCachedDataMethod.invoke(null, player);
         } catch (Exception e) {
-            return new NbtCompound();
+            return new CompoundTag();
         }
     }
 
-    public static void savePlayerData(PlayerEntity player, NbtCompound data) {
+    public static void savePlayerData(Player player, CompoundTag data) {
         if (!isSmfsLoaded() || player == null) return;
         try {
             setSpiritAttributesMethod.invoke(null, player, data);
@@ -233,39 +241,39 @@ public class SmfsIntegration {
         }
     }
 
-    public static void setSpiritResistance(PlayerEntity player, float value) {
-        NbtCompound data = getPlayerData(player);
+    public static void setSpiritResistance(Player player, float value) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.putDouble("spiritResistance", value);
             savePlayerData(player, data);
         }
     }
 
-    public static float getSpiritResistance(PlayerEntity player) {
-        NbtCompound data = getPlayerData(player);
+    public static float getSpiritResistance(Player player) {
+        CompoundTag data = getPlayerData(player);
         if (data != null && data.contains("spiritResistance")) {
             return (float) data.getDouble("spiritResistance");
         }
         return 0f;
     }
 
-    public static void setSpiritDamage(PlayerEntity player, float value) {
-        NbtCompound data = getPlayerData(player);
+    public static void setSpiritDamage(Player player, float value) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.putDouble("spiritDamage", value);
             savePlayerData(player, data);
         }
     }
 
-    public static float getSpiritDamage(PlayerEntity player) {
-        NbtCompound data = getPlayerData(player);
+    public static float getSpiritDamage(Player player) {
+        CompoundTag data = getPlayerData(player);
         if (data != null && data.contains("spiritDamage")) {
             return (float) data.getDouble("spiritDamage");
         }
         return 0f;
     }
 
-    public static void setCurrentSpirit(PlayerEntity player, float value) {
+    public static void setCurrentSpirit(Player player, float value) {
         if (!isSmfsLoaded() || player == null) return;
         try {
             setCurrentSpiritMethod.invoke(null, player, value);
@@ -274,7 +282,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static float getCurrentSpirit(PlayerEntity player) {
+    public static float getCurrentSpirit(Player player) {
         if (!isSmfsLoaded() || player == null) return 0f;
         try {
             return (float) getCurrentSpiritMethod.invoke(null, player);
@@ -283,7 +291,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static void setMaxSpirit(PlayerEntity player, float value) {
+    public static void setMaxSpirit(Player player, float value) {
         if (!isSmfsLoaded() || player == null) return;
         try {
             setMaxSpiritMethod.invoke(null, player, value);
@@ -292,7 +300,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static float getMaxSpirit(PlayerEntity player) {
+    public static float getMaxSpirit(Player player) {
         if (!isSmfsLoaded() || player == null) return 0f;
         try {
             return (float) getMaxSpiritMethod.invoke(null, player);
@@ -301,48 +309,48 @@ public class SmfsIntegration {
         }
     }
 
-    public static void setSanity(PlayerEntity player, float value) {
-        NbtCompound data = getPlayerData(player);
+    public static void setSanity(Player player, float value) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.putDouble("sanity", Math.max(0, Math.min(100, value)));
             savePlayerData(player, data);
         }
     }
 
-    public static float getSanity(PlayerEntity player) {
-        NbtCompound data = getPlayerData(player);
+    public static float getSanity(Player player) {
+        CompoundTag data = getPlayerData(player);
         if (data != null && data.contains("sanity")) {
             return (float) data.getDouble("sanity");
         }
         return 100f;
     }
 
-    public static void setRevivalFactor(PlayerEntity player, double value) {
-        NbtCompound data = getPlayerData(player);
+    public static void setRevivalFactor(Player player, double value) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.putDouble("revivalFactor", value);
             savePlayerData(player, data);
         }
     }
 
-    public static double getRevivalFactor(PlayerEntity player) {
-        NbtCompound data = getPlayerData(player);
+    public static double getRevivalFactor(Player player) {
+        CompoundTag data = getPlayerData(player);
         if (data != null && data.contains("revivalFactor")) {
             return data.getDouble("revivalFactor");
         }
         return 0.0;
     }
 
-    public static void setNbtAttribute(PlayerEntity player, String key, double value) {
-        NbtCompound data = getPlayerData(player);
+    public static void setNbtAttribute(Player player, String key, double value) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.putDouble(key, value);
             savePlayerData(player, data);
         }
     }
 
-    public static double getNbtAttribute(PlayerEntity player, String key, double defaultValue) {
-        NbtCompound data = getPlayerData(player);
+    public static double getNbtAttribute(Player player, String key, double defaultValue) {
+        CompoundTag data = getPlayerData(player);
         if (data != null && data.contains(key)) {
             return data.getDouble(key);
         }
@@ -351,42 +359,42 @@ public class SmfsIntegration {
 
     private static final String DOMAIN_NBT_KEY = "guiyu_ghost_domain";
 
-    private static NbtCompound getDomainData(PlayerEntity player) {
-        NbtCompound data = getPlayerData(player);
-        if (data == null) return new NbtCompound();
+    private static CompoundTag getDomainData(Player player) {
+        CompoundTag data = getPlayerData(player);
+        if (data == null) return new CompoundTag();
         if (!data.contains(DOMAIN_NBT_KEY)) {
-            data.put(DOMAIN_NBT_KEY, new NbtCompound());
+            data.put(DOMAIN_NBT_KEY, new CompoundTag());
             savePlayerData(player, data);
         }
         return data.getCompound(DOMAIN_NBT_KEY);
     }
 
-    private static void saveDomainData(PlayerEntity player, NbtCompound domainData) {
-        NbtCompound data = getPlayerData(player);
+    private static void saveDomainData(Player player, CompoundTag domainData) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.put(DOMAIN_NBT_KEY, domainData);
             savePlayerData(player, data);
         }
     }
 
-    public static boolean isGhostDomainActive(PlayerEntity player) {
-        NbtCompound domain = getDomainData(player);
+    public static boolean isGhostDomainActive(Player player) {
+        CompoundTag domain = getDomainData(player);
         return domain.getBoolean("active");
     }
 
-    public static void setGhostDomainActive(PlayerEntity player, boolean active) {
-        NbtCompound domain = getDomainData(player);
+    public static void setGhostDomainActive(Player player, boolean active) {
+        CompoundTag domain = getDomainData(player);
         domain.putBoolean("active", active);
         saveDomainData(player, domain);
     }
 
-    public static int getGhostDomainColor(PlayerEntity player) {
-        NbtCompound domain = getDomainData(player);
+    public static int getGhostDomainColor(Player player) {
+        CompoundTag domain = getDomainData(player);
         return domain.getInt("color");
     }
 
-    public static void setGhostDomainColor(PlayerEntity player, int color) {
-        NbtCompound domain = getDomainData(player);
+    public static void setGhostDomainColor(Player player, int color) {
+        CompoundTag domain = getDomainData(player);
         domain.putInt("color", Math.max(0, Math.min(7, color)));
         saveDomainData(player, domain);
     }
@@ -405,86 +413,86 @@ public class SmfsIntegration {
         }
     }
 
-    public static int getGhostDomainLevel(PlayerEntity player) {
-        NbtCompound domain = getDomainData(player);
+    public static int getGhostDomainLevel(Player player) {
+        CompoundTag domain = getDomainData(player);
         return domain.getInt("level");
     }
 
-    public static void setGhostDomainLevel(PlayerEntity player, int level) {
-        NbtCompound domain = getDomainData(player);
+    public static void setGhostDomainLevel(Player player, int level) {
+        CompoundTag domain = getDomainData(player);
         domain.putInt("level", Math.max(1, Math.min(10, level)));
         saveDomainData(player, domain);
     }
 
     private static final String EYE_NBT_KEY = "guiyu_ghost_eye";
 
-    private static NbtCompound getEyeData(PlayerEntity player) {
-        NbtCompound data = getPlayerData(player);
-        if (data == null) return new NbtCompound();
+    private static CompoundTag getEyeData(Player player) {
+        CompoundTag data = getPlayerData(player);
+        if (data == null) return new CompoundTag();
         if (!data.contains(EYE_NBT_KEY)) {
-            data.put(EYE_NBT_KEY, new NbtCompound());
+            data.put(EYE_NBT_KEY, new CompoundTag());
             savePlayerData(player, data);
         }
         return data.getCompound(EYE_NBT_KEY);
     }
 
-    private static void saveEyeData(PlayerEntity player, NbtCompound eyeData) {
-        NbtCompound data = getPlayerData(player);
+    private static void saveEyeData(Player player, CompoundTag eyeData) {
+        CompoundTag data = getPlayerData(player);
         if (data != null) {
             data.put(EYE_NBT_KEY, eyeData);
             savePlayerData(player, data);
         }
     }
 
-    public static boolean isGhostEyeActive(PlayerEntity player) {
-        NbtCompound eye = getEyeData(player);
+    public static boolean isGhostEyeActive(Player player) {
+        CompoundTag eye = getEyeData(player);
         return eye.getBoolean("active");
     }
 
-    public static void setGhostEyeActive(PlayerEntity player, boolean active) {
-        NbtCompound eye = getEyeData(player);
+    public static void setGhostEyeActive(Player player, boolean active) {
+        CompoundTag eye = getEyeData(player);
         eye.putBoolean("active", active);
         saveEyeData(player, eye);
     }
 
-    public static int getGhostEyeLevel(PlayerEntity player) {
-        NbtCompound eye = getEyeData(player);
+    public static int getGhostEyeLevel(Player player) {
+        CompoundTag eye = getEyeData(player);
         return eye.getInt("level");
     }
 
-    public static void setGhostEyeLevel(PlayerEntity player, int level) {
-        NbtCompound eye = getEyeData(player);
+    public static void setGhostEyeLevel(Player player, int level) {
+        CompoundTag eye = getEyeData(player);
         eye.putInt("level", Math.max(1, Math.min(10, level)));
         saveEyeData(player, eye);
     }
 
-    public static void setSlotLocked(PlayerEntity player, int slotIndex, boolean locked) {
+    public static void setSlotLocked(Player player, int slotIndex, boolean locked) {
         if (!isSmfsLoaded() || player == null) return;
-        NbtCompound data = getPlayerData(player);
+        CompoundTag data = getPlayerData(player);
         if (data == null) return;
         if (!data.contains("guiyu_slot_flags")) {
-            data.put("guiyu_slot_flags", new NbtCompound());
+            data.put("guiyu_slot_flags", new CompoundTag());
         }
-        NbtCompound flags = data.getCompound("guiyu_slot_flags");
+        CompoundTag flags = data.getCompound("guiyu_slot_flags");
         String key = "slot_" + slotIndex + "_locked";
         flags.putBoolean(key, locked);
         savePlayerData(player, data);
     }
 
-    public static boolean isSlotLocked(PlayerEntity player, int slotIndex) {
+    public static boolean isSlotLocked(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return false;
-        NbtCompound data = getPlayerData(player);
+        CompoundTag data = getPlayerData(player);
         if (data == null || !data.contains("guiyu_slot_flags")) return false;
-        NbtCompound flags = data.getCompound("guiyu_slot_flags");
+        CompoundTag flags = data.getCompound("guiyu_slot_flags");
         return flags.getBoolean("slot_" + slotIndex + "_locked");
     }
 
-    public static boolean clearSlot(PlayerEntity player, int slotIndex) {
+    public static boolean clearSlot(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return false;
         return setSlotData(player, slotIndex, ItemStack.EMPTY);
     }
 
-    public static boolean swapSlots(PlayerEntity player, int slotA, int slotB) {
+    public static boolean swapSlots(Player player, int slotA, int slotB) {
         if (!isSmfsLoaded() || player == null) return false;
         if (slotA < 0 || slotA >= getTotalSlotCount() || slotB < 0 || slotB >= getTotalSlotCount()) return false;
         ItemStack itemA = getGhostSlotItem(player, slotA);
@@ -495,14 +503,14 @@ public class SmfsIntegration {
         return false;
     }
 
-    public static boolean setGhostInSlot(PlayerEntity player, int slotIndex, String ghostItemId) {
+    public static boolean setGhostInSlot(Player player, int slotIndex, String ghostItemId) {
         if (!isSmfsLoaded() || player == null || ghostItemId == null || ghostItemId.isEmpty()) return false;
         if (slotIndex < 0 || slotIndex >= getPlayerTotalSlotCount(player)) return false;
         try {
-            Identifier itemId = Identifier.tryParse(ghostItemId);
+            ResourceLocation itemId = ResourceLocation.tryParse(ghostItemId);
             if (itemId == null) return false;
-            net.minecraft.item.Item item = net.minecraft.registry.Registries.ITEM.get(itemId);
-            if (item == null || item == net.minecraft.item.Items.AIR) return false;
+            Item item = BuiltInRegistries.ITEM.get(itemId);
+            if (item == null || item == Items.AIR) return false;
             ItemStack ghostStack = new ItemStack(item);
             return setSlotData(player, slotIndex, ghostStack);
         } catch (Exception e) {
@@ -511,13 +519,13 @@ public class SmfsIntegration {
         }
     }
 
-    public static double getSlotLevelPercent(PlayerEntity player, int slotIndex) {
+    public static double getSlotLevelPercent(Player player, int slotIndex) {
         int level = getSlotLevel(player, slotIndex);
         if (level <= 0) return 0;
         return Math.min(1.0, level / 100.0);
     }
 
-    public static int getMainGhostSlot(PlayerEntity player) {
+    public static int getMainGhostSlot(Player player) {
         if (!isSmfsLoaded() || player == null) return 0;
         try {
             return (int) getMainGhostSlotMethod.invoke(null, player);
@@ -526,7 +534,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static void setMainGhostSlot(PlayerEntity player, int slotIndex) {
+    public static void setMainGhostSlot(Player player, int slotIndex) {
         if (!isSmfsLoaded() || player == null) return;
         try {
             setMainGhostSlotMethod.invoke(null, player, slotIndex);
@@ -535,7 +543,7 @@ public class SmfsIntegration {
         }
     }
 
-    public static boolean hasMainGhost(PlayerEntity player) {
+    public static boolean hasMainGhost(Player player) {
         if (!isSmfsLoaded() || player == null) return false;
         try {
             return (boolean) hasMainGhostMethod.invoke(null, player);
@@ -544,17 +552,17 @@ public class SmfsIntegration {
         }
     }
 
-    public static String getMainGhostName(PlayerEntity player) {
+    public static String getMainGhostName(Player player) {
         if (!isSmfsLoaded() || player == null) return "无";
         try {
-            Text text = (Text) getMainGhostNameMethod.invoke(null, player);
+            net.minecraft.network.chat.Component text = (net.minecraft.network.chat.Component) getMainGhostNameMethod.invoke(null, player);
             return text.getString();
         } catch (Exception e) {
             return "无";
         }
     }
 
-    public static int getMainGhostLevel(PlayerEntity player) {
+    public static int getMainGhostLevel(Player player) {
         if (!isSmfsLoaded() || player == null) return 0;
         try {
             return (int) getMainGhostLevelMethod.invoke(null, player);
@@ -572,7 +580,7 @@ public class SmfsIntegration {
         return defaultExtraSlotCount;
     }
 
-    public static void cycleMainGhost(PlayerEntity player) {
+    public static void cycleMainGhost(Player player) {
         if (!isSmfsLoaded() || player == null) return;
         int current = getMainGhostSlot(player);
         int total = getPlayerTotalSlotCount(player);
@@ -585,17 +593,17 @@ public class SmfsIntegration {
         }
     }
 
-    public static boolean isGhostPossessed(PlayerEntity player) {
+    public static boolean isGhostPossessed(Player player) {
         return countOccupiedSlots(player) > 0;
     }
 
-    public static double getGhostPossessionPercent(PlayerEntity player) {
+    public static double getGhostPossessionPercent(Player player) {
         int total = getTotalSlotCount();
         if (total <= 0) return 0;
         return (double) countOccupiedSlots(player) / total;
     }
 
-    public static List<String> listAllGhostTypes(PlayerEntity player) {
+    public static List<String> listAllGhostTypes(Player player) {
         List<String> types = new ArrayList<>();
         int total = getPlayerTotalSlotCount(player);
         for (int i = 0; i < total; i++) {
@@ -607,7 +615,7 @@ public class SmfsIntegration {
         return types;
     }
 
-    public static List<Map<String, Object>> listAllSlots(PlayerEntity player) {
+    public static List<Map<String, Object>> listAllSlots(Player player) {
         List<Map<String, Object>> slots = new ArrayList<>();
         int total = getPlayerTotalSlotCount(player);
         for (int i = 0; i < total; i++) {
@@ -645,16 +653,22 @@ public class SmfsIntegration {
         if (!isSmfsLoaded()) return;
 
         try {
-            net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
-                // 每 10 tick 检测一次（减少性能开销）
-                if (server.getTicks() % 10 != 0) return;
+            MinecraftForge.EVENT_BUS.register(new Object() {
+                @SubscribeEvent
+                public void onServerTick(TickEvent.ServerTickEvent event) {
+                    if (event.phase != TickEvent.Phase.END) return;
+                    var server = event.getServer();
+                    if (server == null) return;
+                    // 每 10 tick 检测一次（减少性能开销）
+                    if (server.getTickCount() % 10 != 0) return;
 
-                for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                    try {
-                        detectSlotChanges(player);
-                        detectAttributeChanges(player);
-                        detectMainGhostChanges(player);
-                    } catch (Exception e) {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        try {
+                            detectSlotChanges(player);
+                            detectAttributeChanges(player);
+                            detectMainGhostChanges(player);
+                        } catch (Exception e) {
+                        }
                     }
                 }
             });
@@ -666,8 +680,8 @@ public class SmfsIntegration {
         }
     }
 
-    private static void detectSlotChanges(ServerPlayerEntity player) {
-        UUID uuid = player.getUuid();
+    private static void detectSlotChanges(ServerPlayer player) {
+        UUID uuid = player.getUUID();
         int total = getPlayerTotalSlotCount(player);
         boolean[] currentOccupied = new boolean[total];
         String[] currentTypes = new String[total];
@@ -698,8 +712,8 @@ public class SmfsIntegration {
         cachedSlotGhostTypes.put(uuid, currentTypes);
     }
 
-    private static void detectAttributeChanges(ServerPlayerEntity player) {
-        UUID uuid = player.getUuid();
+    private static void detectAttributeChanges(ServerPlayer player) {
+        UUID uuid = player.getUUID();
         Map<String, Double> currentAttrs = new HashMap<>();
 
         for (String key : TRACKED_ATTR_KEYS) {
@@ -720,8 +734,8 @@ public class SmfsIntegration {
         cachedAttributes.put(uuid, currentAttrs);
     }
 
-    private static void detectMainGhostChanges(ServerPlayerEntity player) {
-        UUID uuid = player.getUuid();
+    private static void detectMainGhostChanges(ServerPlayer player) {
+        UUID uuid = player.getUUID();
         int currentSlot = getMainGhostSlot(player);
         Integer prevSlot = cachedMainGhostSlot.get(uuid);
 
@@ -732,7 +746,7 @@ public class SmfsIntegration {
         cachedMainGhostSlot.put(uuid, currentSlot);
     }
 
-    private static double getAttrValue(PlayerEntity player, String key) {
+    private static double getAttrValue(Player player, String key) {
         switch (key) {
             case "spiritResistance": return getSpiritResistance(player);
             case "spiritDamage": return getSpiritDamage(player);
@@ -744,12 +758,12 @@ public class SmfsIntegration {
         }
     }
 
-    public static void fireSlotChangeEvent(PlayerEntity player, int slotIndex, String oldGhostType, String newGhostType) {
-        if (player == null || player.getWorld().isClient()) return;
+    public static void fireSlotChangeEvent(Player player, int slotIndex, String oldGhostType, String newGhostType) {
+        if (player == null || player.level().isClientSide()) return;
         try {
             bai.god.shen.ShenEvent event = new bai.god.shen.ShenEvent(
                 bai.god.shen.ShenEventType.SMFS_SLOT_CHANGE,
-                player, player.getBlockPos(), player.getWorld()
+                player, player.blockPosition(), player.level()
             );
             event.params.put("slotIndex", String.valueOf(slotIndex));
             event.params.put("oldGhostType", oldGhostType != null ? oldGhostType : "empty");
@@ -760,12 +774,12 @@ public class SmfsIntegration {
         }
     }
 
-    public static void fireSpiritAttrChangeEvent(PlayerEntity player, String attrKey, double oldValue, double newValue) {
-        if (player == null || player.getWorld().isClient()) return;
+    public static void fireSpiritAttrChangeEvent(Player player, String attrKey, double oldValue, double newValue) {
+        if (player == null || player.level().isClientSide()) return;
         try {
             bai.god.shen.ShenEvent event = new bai.god.shen.ShenEvent(
                 bai.god.shen.ShenEventType.SMFS_SPIRIT_ATTR_CHANGE,
-                player, player.getBlockPos(), player.getWorld()
+                player, player.blockPosition(), player.level()
             );
             event.params.put("attrKey", attrKey);
             event.params.put("oldValue", String.valueOf(oldValue));
@@ -776,12 +790,12 @@ public class SmfsIntegration {
         }
     }
 
-    public static void fireMainGhostSwitchEvent(PlayerEntity player, int oldSlot, int newSlot) {
-        if (player == null || player.getWorld().isClient()) return;
+    public static void fireMainGhostSwitchEvent(Player player, int oldSlot, int newSlot) {
+        if (player == null || player.level().isClientSide()) return;
         try {
             bai.god.shen.ShenEvent event = new bai.god.shen.ShenEvent(
                 bai.god.shen.ShenEventType.SMFS_MAIN_GHOST_SWITCH,
-                player, player.getBlockPos(), player.getWorld()
+                player, player.blockPosition(), player.level()
             );
             event.params.put("oldSlot", String.valueOf(oldSlot));
             event.params.put("newSlot", String.valueOf(newSlot));
@@ -791,12 +805,12 @@ public class SmfsIntegration {
         }
     }
 
-    public static void fireGhostSkillUsedEvent(PlayerEntity player, String skillName, LivingEntity target) {
-        if (player == null || player.getWorld().isClient()) return;
+    public static void fireGhostSkillUsedEvent(Player player, String skillName, LivingEntity target) {
+        if (player == null || player.level().isClientSide()) return;
         try {
             bai.god.shen.ShenEvent event = new bai.god.shen.ShenEvent(
                 bai.god.shen.ShenEventType.SMFS_GHOST_SKILL_USED,
-                player, target, player.getBlockPos(), player.getWorld()
+                player, target, player.blockPosition(), player.level()
             );
             event.params.put("skillName", skillName);
             event.params.put("target", target != null ? target.getName().getString() : "none");
@@ -806,13 +820,13 @@ public class SmfsIntegration {
         }
     }
 
-    public static void setMainGhostSlotWithEvent(PlayerEntity player, int slotIndex) {
+    public static void setMainGhostSlotWithEvent(Player player, int slotIndex) {
         int oldSlot = getMainGhostSlot(player);
         setMainGhostSlot(player, slotIndex);
         fireMainGhostSwitchEvent(player, oldSlot, slotIndex);
     }
 
-    public static void cycleMainGhostWithEvent(PlayerEntity player) {
+    public static void cycleMainGhostWithEvent(Player player) {
         int oldSlot = getMainGhostSlot(player);
         cycleMainGhost(player);
         int newSlot = getMainGhostSlot(player);
@@ -821,37 +835,37 @@ public class SmfsIntegration {
         }
     }
 
-    public static void setSpiritResistanceWithEvent(PlayerEntity player, float value) {
+    public static void setSpiritResistanceWithEvent(Player player, float value) {
         float oldValue = getSpiritResistance(player);
         setSpiritResistance(player, value);
         fireSpiritAttrChangeEvent(player, "spiritResistance", oldValue, value);
     }
 
-    public static void setSpiritDamageWithEvent(PlayerEntity player, float value) {
+    public static void setSpiritDamageWithEvent(Player player, float value) {
         float oldValue = getSpiritDamage(player);
         setSpiritDamage(player, value);
         fireSpiritAttrChangeEvent(player, "spiritDamage", oldValue, value);
     }
 
-    public static void setCurrentSpiritWithEvent(PlayerEntity player, float value) {
+    public static void setCurrentSpiritWithEvent(Player player, float value) {
         float oldValue = getCurrentSpirit(player);
         setCurrentSpirit(player, value);
         fireSpiritAttrChangeEvent(player, "currentSpirit", oldValue, value);
     }
 
-    public static void setMaxSpiritWithEvent(PlayerEntity player, float value) {
+    public static void setMaxSpiritWithEvent(Player player, float value) {
         float oldValue = getMaxSpirit(player);
         setMaxSpirit(player, value);
         fireSpiritAttrChangeEvent(player, "maxSpirit", oldValue, value);
     }
 
-    public static void setSanityWithEvent(PlayerEntity player, float value) {
+    public static void setSanityWithEvent(Player player, float value) {
         float oldValue = getSanity(player);
         setSanity(player, value);
         fireSpiritAttrChangeEvent(player, "sanity", oldValue, value);
     }
 
-    public static void setRevivalFactorWithEvent(PlayerEntity player, double value) {
+    public static void setRevivalFactorWithEvent(Player player, double value) {
         double oldValue = getRevivalFactor(player);
         setRevivalFactor(player, value);
         fireSpiritAttrChangeEvent(player, "revivalFactor", oldValue, value);

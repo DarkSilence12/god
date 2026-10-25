@@ -1,11 +1,9 @@
 package bai.god.shen;
 
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtString;
-import net.minecraft.util.Identifier;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -131,8 +129,8 @@ public class ShenRule {
         return sb.toString();
     }
 
-    public NbtCompound toNbt() {
-        NbtCompound nbt = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag nbt = new CompoundTag();
         nbt.putString("eventType", eventType.name());
         nbt.putString("targetType", targetType.name());
         nbt.putString("effectType", effectType != null ? effectType.name() : "");
@@ -146,23 +144,23 @@ public class ShenRule {
         }
 
         if (eventTypes.size() > 1) {
-            NbtList eventList = new NbtList();
+            ListTag eventList = new ListTag();
             for (ShenEventType et : eventTypes) {
-                eventList.add(NbtString.of(et.name()));
+                eventList.add(StringTag.valueOf(et.name()));
             }
             nbt.put("eventTypes", eventList);
         }
 
         if (targetTypes.size() > 1) {
-            NbtList targetList = new NbtList();
+            ListTag targetList = new ListTag();
             for (ShenTargetType tt : targetTypes) {
-                targetList.add(NbtString.of(tt.name()));
+                targetList.add(StringTag.valueOf(tt.name()));
             }
             nbt.put("targetTypes", targetList);
         }
 
         if (!conditions.isEmpty()) {
-            NbtList conditionList = new NbtList();
+            ListTag conditionList = new ListTag();
             for (ShenCondition condition : conditions) {
                 conditionList.add(condition.toNbt());
             }
@@ -170,7 +168,7 @@ public class ShenRule {
         }
 
         if (!effects.isEmpty()) {
-            NbtList effectsList = new NbtList();
+            ListTag effectsList = new ListTag();
             for (ShenEffectEntry entry : effects) {
                 effectsList.add(entry.toNbt());
             }
@@ -178,7 +176,7 @@ public class ShenRule {
         }
 
         if (!params.isEmpty()) {
-            NbtCompound paramNbt = new NbtCompound();
+            CompoundTag paramNbt = new CompoundTag();
             for (Map.Entry<String, String> entry : params.entrySet()) {
                 paramNbt.putString(entry.getKey(), entry.getValue());
             }
@@ -188,7 +186,7 @@ public class ShenRule {
         return nbt;
     }
 
-    public static ShenRule fromNbt(NbtCompound nbt) {
+    public static ShenRule fromNbt(CompoundTag nbt) {
         ShenRule rule = new ShenRule();
         rule.eventType = ShenEventType.valueOf(nbt.getString("eventType"));
         rule.targetType = ShenTargetType.valueOf(nbt.getString("targetType"));
@@ -199,7 +197,7 @@ public class ShenRule {
 
         rule.eventTypes.add(rule.eventType);
         if (nbt.contains("eventTypes")) {
-            NbtList eventList = nbt.getList("eventTypes", NbtElement.STRING_TYPE);
+            ListTag eventList = nbt.getList("eventTypes", Tag.TAG_STRING);
             rule.eventTypes.clear();
             for (int i = 0; i < eventList.size(); i++) {
                 rule.eventTypes.add(ShenEventType.valueOf(eventList.getString(i)));
@@ -208,7 +206,7 @@ public class ShenRule {
 
         rule.targetTypes.add(rule.targetType);
         if (nbt.contains("targetTypes")) {
-            NbtList targetList = nbt.getList("targetTypes", NbtElement.STRING_TYPE);
+            ListTag targetList = nbt.getList("targetTypes", Tag.TAG_STRING);
             rule.targetTypes.clear();
             for (int i = 0; i < targetList.size(); i++) {
                 rule.targetTypes.add(ShenTargetType.valueOf(targetList.getString(i)));
@@ -216,7 +214,7 @@ public class ShenRule {
         }
 
         if (nbt.contains("effects")) {
-            NbtList effectsList = nbt.getList("effects", NbtElement.COMPOUND_TYPE);
+            ListTag effectsList = nbt.getList("effects", Tag.TAG_COMPOUND);
             for (int i = 0; i < effectsList.size(); i++) {
                 rule.effects.add(ShenEffectEntry.fromNbt(effectsList.getCompound(i)));
             }
@@ -235,15 +233,15 @@ public class ShenRule {
         }
 
         if (nbt.contains("conditions")) {
-            NbtList conditionList = nbt.getList("conditions", NbtElement.COMPOUND_TYPE);
+            ListTag conditionList = nbt.getList("conditions", Tag.TAG_COMPOUND);
             for (int i = 0; i < conditionList.size(); i++) {
                 rule.conditions.add(ShenCondition.fromNbt(conditionList.getCompound(i)));
             }
         }
 
         if (nbt.contains("params")) {
-            NbtCompound paramNbt = nbt.getCompound("params");
-            for (String key : paramNbt.getKeys()) {
+            CompoundTag paramNbt = nbt.getCompound("params");
+            for (String key : paramNbt.getAllKeys()) {
                 rule.params.put(key, paramNbt.getString(key));
             }
             // 向后兼容：旧格式的 params 迁移到第一个 effect entry
@@ -273,13 +271,13 @@ public class ShenRule {
             return type.getDisplayName() + operator + value;
         }
 
-        public NbtCompound toNbt() {
-            NbtCompound nbt = new NbtCompound();
+        public CompoundTag toNbt() {
+            CompoundTag nbt = new CompoundTag();
             nbt.putString("conditionType", type.name());
             nbt.putString("operator", operator);
             nbt.putString("value", value);
             if (!params.isEmpty()) {
-                NbtCompound paramNbt = new NbtCompound();
+                CompoundTag paramNbt = new CompoundTag();
                 for (Map.Entry<String, String> entry : params.entrySet()) {
                     paramNbt.putString(entry.getKey(), entry.getValue());
                 }
@@ -288,14 +286,14 @@ public class ShenRule {
             return nbt;
         }
 
-        public static ShenCondition fromNbt(NbtCompound nbt) {
+        public static ShenCondition fromNbt(CompoundTag nbt) {
             ShenCondition condition = new ShenCondition();
             condition.type = ShenConditionType.valueOf(nbt.getString("conditionType"));
             condition.operator = nbt.getString("operator");
             condition.value = nbt.getString("value");
             if (nbt.contains("params")) {
-                NbtCompound paramNbt = nbt.getCompound("params");
-                for (String key : paramNbt.getKeys()) {
+                CompoundTag paramNbt = nbt.getCompound("params");
+                for (String key : paramNbt.getAllKeys()) {
                     condition.params.put(key, paramNbt.getString(key));
                 }
             }
@@ -368,12 +366,12 @@ public class ShenRule {
             }
         }
 
-        public NbtCompound toNbt() {
-            NbtCompound nbt = new NbtCompound();
+        public CompoundTag toNbt() {
+            CompoundTag nbt = new CompoundTag();
             nbt.putString("effectType", effectType.name());
             nbt.putInt("delayTicks", delayTicks);
             if (!params.isEmpty()) {
-                NbtCompound paramNbt = new NbtCompound();
+                CompoundTag paramNbt = new CompoundTag();
                 for (Map.Entry<String, String> entry : params.entrySet()) {
                     paramNbt.putString(entry.getKey(), entry.getValue());
                 }
@@ -382,13 +380,13 @@ public class ShenRule {
             return nbt;
         }
 
-        public static ShenEffectEntry fromNbt(NbtCompound nbt) {
+        public static ShenEffectEntry fromNbt(CompoundTag nbt) {
             ShenEffectEntry entry = new ShenEffectEntry();
             entry.effectType = ShenEffectType.valueOf(nbt.getString("effectType"));
             entry.delayTicks = nbt.getInt("delayTicks");
             if (nbt.contains("params")) {
-                NbtCompound paramNbt = nbt.getCompound("params");
-                for (String key : paramNbt.getKeys()) {
+                CompoundTag paramNbt = nbt.getCompound("params");
+                for (String key : paramNbt.getAllKeys()) {
                     entry.params.put(key, paramNbt.getString(key));
                 }
             }

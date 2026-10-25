@@ -1,19 +1,24 @@
 package bai.god.shen;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.gen.structure.Structure;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +80,7 @@ public class ShenTargetResolver {
 
     private static void resolveAllPlayers(List<LivingEntity> targets, ShenEvent event, ShenRule rule) {
         if (event.world != null && event.world.getServer() != null) {
-            for (ServerPlayerEntity player : event.world.getServer().getPlayerManager().getPlayerList()) {
+            for (ServerPlayer player : event.world.getServer().getPlayerList().getPlayers()) {
                 targets.add(player);
             }
         }
@@ -87,8 +92,8 @@ public class ShenTargetResolver {
         double range = rule.getParamDouble("range", 50.0);
         String entityType = rule.getParam("entityType", "all");
 
-        Box box = new Box(event.pos).expand(range);
-        for (Entity entity : event.world.getOtherEntities(null, box)) {
+        AABB box = new AABB(event.pos).inflate(range);
+        for (Entity entity : event.world.getEntities((Entity) null, box)) {
             if (entity instanceof LivingEntity living) {
                 if (entity == event.source) continue;
                 if (matchesEntityType(living, entityType)) {
@@ -109,8 +114,8 @@ public class ShenTargetResolver {
     double range = rule.getParamDouble("range", 50);
     boolean includeSelf = rule.getParamBool("includeSelf", false);
 
-    Box box = new Box(event.pos).expand(range);
-    for (Entity entity : event.world.getOtherEntities(null, box)) {
+    AABB box = new AABB(event.pos).inflate(range);
+    for (Entity entity : event.world.getEntities((Entity) null, box)) {
         if (entity instanceof LivingEntity living) {
             if (!includeSelf && living == event.source) continue;
             if (matchesEntityType(living, entityType)) {
@@ -122,13 +127,13 @@ public class ShenTargetResolver {
 
     private static boolean matchesEntityType(LivingEntity entity, String typeFilter) {
         if (typeFilter.equals("all")) return true;
-        if (typeFilter.equals("player")) return entity instanceof PlayerEntity;
-        if (typeFilter.equals("monster")) return entity instanceof net.minecraft.entity.mob.Monster;
-        if (typeFilter.equals("animal")) return entity instanceof net.minecraft.entity.passive.AnimalEntity;
+        if (typeFilter.equals("player")) return entity instanceof Player;
+        if (typeFilter.equals("monster")) return entity instanceof Monster;
+        if (typeFilter.equals("animal")) return entity instanceof Animal;
 
-        Identifier filterId = Identifier.tryParse(typeFilter);
+        ResourceLocation filterId = ResourceLocation.tryParse(typeFilter);
         if (filterId != null) {
-            Identifier entityId = Registries.ENTITY_TYPE.getId(entity.getType());
+            ResourceLocation entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
             return filterId.equals(entityId);
         }
         return false;
@@ -140,8 +145,8 @@ public class ShenTargetResolver {
         String entityType = rule.getParam("entityType", "all");
         boolean includeSource = rule.getParamBool("includeSource", false);
 
-        Box box = new Box(event.pos).expand(range);
-        for (Entity entity : event.world.getOtherEntities(null, box)) {
+        AABB box = new AABB(event.pos).inflate(range);
+        for (Entity entity : event.world.getEntities((Entity) null, box)) {
             if (entity instanceof LivingEntity living) {
                 if (!includeSource && entity == event.source) continue;
                 if (matchesEntityType(living, entityType)) {
@@ -152,11 +157,11 @@ public class ShenTargetResolver {
     }
 
     private static void resolveLineOfSight(List<LivingEntity> targets, ShenEvent event, ShenRule rule) {
-        if (event.source instanceof ServerPlayerEntity player) {
+        if (event.source instanceof ServerPlayer player) {
             double range = rule.getParamDouble("range", 50.0);
-            net.minecraft.util.hit.HitResult hitResult = player.raycast(range, 0.0f, false);
+            HitResult hitResult = player.pick(range, 0.0f, false);
 
-            if (hitResult instanceof net.minecraft.util.hit.EntityHitResult entityHit) {
+            if (hitResult instanceof EntityHitResult entityHit) {
                 if (entityHit.getEntity() instanceof LivingEntity target) {
                     targets.add(target);
                     return;
@@ -164,8 +169,8 @@ public class ShenTargetResolver {
             }
 
             if (event.pos != null && event.world != null) {
-                Box box = new Box(event.pos).expand(2.0);
-                for (Entity entity : event.world.getOtherEntities(player, box)) {
+                AABB box = new AABB(event.pos).inflate(2.0);
+                for (Entity entity : event.world.getEntities(player, box)) {
                     if (entity instanceof LivingEntity living) {
                         targets.add(living);
                         return;
@@ -185,8 +190,8 @@ public class ShenTargetResolver {
             try {
                 UUID uuid = UUID.fromString(uuidStr);
                 if (event.world.getServer() != null) {
-                    for (ServerPlayerEntity player : event.world.getServer().getPlayerManager().getPlayerList()) {
-                        if (player.getUuid().equals(uuid)) {
+                    for (ServerPlayer player : event.world.getServer().getPlayerList().getPlayers()) {
+                        if (player.getUUID().equals(uuid)) {
                             targets.add(player);
                             break;
                         }
@@ -197,7 +202,7 @@ public class ShenTargetResolver {
 
         if (!playerName.isEmpty()) {
             if (event.world.getServer() != null) {
-                ServerPlayerEntity namedPlayer = event.world.getServer().getPlayerManager().getPlayer(playerName);
+                ServerPlayer namedPlayer = event.world.getServer().getPlayerList().getPlayerByName(playerName);
                 if (namedPlayer != null) {
                     targets.add(namedPlayer);
                 }
@@ -205,12 +210,12 @@ public class ShenTargetResolver {
         }
 
         if (!entityName.isEmpty()) {
-            Identifier targetId = Identifier.tryParse(entityName);
+            ResourceLocation targetId = ResourceLocation.tryParse(entityName);
             if (targetId != null && event.world.getServer() != null) {
-                for (net.minecraft.server.world.ServerWorld sw : event.world.getServer().getWorlds()) {
-                    for (Entity entity : sw.iterateEntities()) {
+                for (ServerLevel sw : event.world.getServer().getAllLevels()) {
+                    for (Entity entity : sw.getAllEntities()) {
                         if (entity instanceof LivingEntity living
-                            && targetId.equals(Registries.ENTITY_TYPE.getId(living.getType()))) {
+                            && targetId.equals(BuiltInRegistries.ENTITY_TYPE.getKey(living.getType()))) {
                             targets.add(living);
                         }
                     }
@@ -220,27 +225,27 @@ public class ShenTargetResolver {
     }
 
     private static void resolveStructureBounds(List<LivingEntity> targets, ShenEvent event, ShenRule rule) {
-        if (event.world == null || !(event.world instanceof ServerWorld serverWorld)) return;
+        if (event.world == null || !(event.world instanceof ServerLevel serverWorld)) return;
         String structureId = rule.getParam("structureId", "");
         double range = rule.getParamDouble("range", 200);
         String entityType = rule.getParam("entityType", "all");
 
         if (structureId.isEmpty()) return;
-        Identifier expectedId = Identifier.tryParse(structureId);
-        BlockPos center = event.pos != null ? event.pos : (event.source != null ? event.source.getBlockPos() : BlockPos.ORIGIN);
+        ResourceLocation expectedId = ResourceLocation.tryParse(structureId);
+        BlockPos center = event.pos != null ? event.pos : (event.source != null ? event.source.blockPosition() : BlockPos.ZERO);
 
         int chunkRange = (int) Math.ceil(range / 16.0) + 1;
         for (int dx = -chunkRange; dx <= chunkRange; dx++) {
             for (int dz = -chunkRange; dz <= chunkRange; dz++) {
-                Chunk chunk = serverWorld.getChunk(
+                LevelChunk chunk = serverWorld.getChunk(
                     (center.getX() + dx * 16) >> 4,
                     (center.getZ() + dz * 16) >> 4);
-                var starts = chunk.getStructureStarts();
+                var starts = chunk.getAllStarts();
 
                 for (var entry : starts.entrySet()) {
                     Structure structure = entry.getKey();
-                    Identifier id = serverWorld.getRegistryManager()
-                        .get(RegistryKeys.STRUCTURE).getId(structure);
+                    ResourceLocation id = serverWorld.registryAccess()
+                        .registryOrThrow(Registries.STRUCTURE).getKey(structure);
 
                     boolean matches = expectedId != null && id != null && id.equals(expectedId);
                     if (!matches && id != null) {
@@ -249,11 +254,11 @@ public class ShenTargetResolver {
 
                     if (matches) {
                         var start = entry.getValue();
-                        net.minecraft.util.math.BlockBox bb = start.getBoundingBox();
-                        Box boundingBox = new Box(
-                            bb.getMinX(), bb.getMinY(), bb.getMinZ(),
-                            bb.getMaxX() + 1, bb.getMaxY() + 1, bb.getMaxZ() + 1);
-                        for (Entity entity : event.world.getOtherEntities(null, boundingBox)) {
+                        BoundingBox bb = start.getBoundingBox();
+                        AABB boundingBox = new AABB(
+                            bb.minX(), bb.minY(), bb.minZ(),
+                            bb.maxX() + 1, bb.maxY() + 1, bb.maxZ() + 1);
+                        for (Entity entity : event.world.getEntities((Entity) null, boundingBox)) {
                             if (entity instanceof LivingEntity living && living != event.source
                                     && matchesEntityType(living, entityType)) {
                                 targets.add(living);
@@ -266,11 +271,32 @@ public class ShenTargetResolver {
     }
 
     private static void resolveRegion(List<LivingEntity> targets, ShenEvent event, ShenRule rule) {
+        if (event.world == null) return;
+
+        // 读取 GUI 参数：X/Y/Z 轴半径 + 中心模式（事件位置 / 事件源）
+        double radiusX = rule.getParamDouble("radiusX", 5.0);
+        double radiusY = rule.getParamDouble("radiusY", 5.0);
+        double radiusZ = rule.getParamDouble("radiusZ", 5.0);
         String centerMode = rule.getParam("centerMode", "eventPos");
+
+        // 确定区域中心
+        BlockPos center;
         if ("eventSource".equals(centerMode) && event.source != null) {
-            targets.add(event.source);
+            center = event.source.blockPosition();
+        } else if (event.pos != null) {
+            center = event.pos;
         } else if (event.source != null) {
-            targets.add(event.source);
+            center = event.source.blockPosition();
+        } else {
+            return;
+        }
+
+        // 按半径构建区域包围盒，检索区域内所有生物作为目标
+        AABB box = new AABB(center).inflate(radiusX, radiusY, radiusZ);
+        for (Entity entity : event.world.getEntities((Entity) null, box)) {
+            if (entity instanceof LivingEntity living && living != event.source) {
+                targets.add(living);
+            }
         }
     }
 }

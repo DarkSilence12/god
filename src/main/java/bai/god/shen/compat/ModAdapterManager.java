@@ -1,17 +1,28 @@
 package bai.god.shen.compat;
 
-import com.google.gson.*;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtHelper;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NumericTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.entity.LivingEntity;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 public class ModAdapterManager {
@@ -322,10 +333,10 @@ public class ModAdapterManager {
     public static void checkEntityNbtChanges(LivingEntity entity) {
         if (entity == null) return;
         if (entity.isRemoved()) return;
-        if (entity.getWorld() == null) return;
+        if (entity.level() == null) return;
 
-        UUID uuid = entity.getUuid();
-        NbtCompound entityNbt = entity.writeNbt(new NbtCompound());
+        UUID uuid = entity.getUUID();
+        CompoundTag entityNbt = entity.saveWithoutId(new CompoundTag());
         Map<String, String> prevValues = previousNbtValues.computeIfAbsent(uuid, k -> new HashMap<>());
 
         for (Map.Entry<String, NbtWatchEntry> watchEntry : nbtWatchMap.entrySet()) {
@@ -368,7 +379,7 @@ public class ModAdapterManager {
                         bai.god.shen.ShenEventBus.fire(
                             new bai.god.shen.ShenEvent(
                                 bai.god.shen.ShenEventType.MOD_ADAPTER_EVENT,
-                                entity, entity.getBlockPos(), entity.getWorld()
+                                entity, entity.blockPosition(), entity.level()
                             ) {
                                 { this.params.put("adapterEventId", evtFullId); }
                             }
@@ -379,14 +390,14 @@ public class ModAdapterManager {
         }
     }
 
-    public static String readNbtPath(NbtCompound root, String path) {
+    public static String readNbtPath(CompoundTag root, String path) {
         String[] parts = path.split("\\.");
-        NbtElement current = root;
+        Tag current = root;
         for (String part : parts) {
-            if (current instanceof NbtCompound compound) {
+            if (current instanceof CompoundTag compound) {
                 current = compound.get(part);
                 if (current == null) return null;
-            } else if (current instanceof net.minecraft.nbt.NbtList list) {
+            } else if (current instanceof ListTag list) {
                 try {
                     int index = Integer.parseInt(part);
                     if (index >= 0 && index < list.size()) {
@@ -401,19 +412,19 @@ public class ModAdapterManager {
                 return null;
             }
         }
-        if (current instanceof net.minecraft.nbt.AbstractNbtNumber num) {
-            return num.numberValue().toString();
+        if (current instanceof NumericTag num) {
+            return num.getAsNumber().toString();
         }
-        return current.asString();
+        return current.getAsString();
     }
 
-    public static boolean writeNbtPath(NbtCompound root, String path, String value, String type, String mode) {
+    public static boolean writeNbtPath(CompoundTag root, String path, String value, String type, String mode) {
         if (path.isEmpty()) return false;
         String[] parts = path.split("\\.");
-        NbtElement current = root;
+        Tag current = root;
 
         for (int i = 0; i < parts.length - 1; i++) {
-            if (current instanceof NbtCompound compound) {
+            if (current instanceof CompoundTag compound) {
                 current = compound.get(parts[i]);
                 if (current == null) return false;
             } else {
@@ -422,11 +433,11 @@ public class ModAdapterManager {
         }
 
         String lastKey = parts[parts.length - 1];
-        if (current instanceof NbtCompound compound) {
-            NbtElement existing = compound.get(lastKey);
+        if (current instanceof CompoundTag compound) {
+            Tag existing = compound.get(lastKey);
             double curVal = 0;
-            if (existing instanceof net.minecraft.nbt.AbstractNbtNumber num) {
-                curVal = num.numberValue().doubleValue();
+            if (existing instanceof NumericTag num) {
+                curVal = num.getAsDouble();
             }
             double newVal;
             try { newVal = Double.parseDouble(value); } catch (NumberFormatException e) { return false; }
@@ -473,7 +484,7 @@ public class ModAdapterManager {
         }
         if (cond == null) return false;
 
-        NbtCompound entityNbt = entity.writeNbt(new NbtCompound());
+        CompoundTag entityNbt = entity.saveWithoutId(new CompoundTag());
         String currentStr = readNbtPath(entityNbt, cond.nbtPath);
         if (currentStr == null) return false;
 
@@ -524,10 +535,10 @@ public class ModAdapterManager {
         }
         if (eff == null) return false;
 
-        NbtCompound entityNbt = entity.writeNbt(new NbtCompound());
+        CompoundTag entityNbt = entity.saveWithoutId(new CompoundTag());
         boolean result = writeNbtPath(entityNbt, eff.nbtPath, value, eff.type, eff.mode);
         if (result) {
-            entity.readNbt(entityNbt);
+            entity.load(entityNbt);
         }
         return result;
     }

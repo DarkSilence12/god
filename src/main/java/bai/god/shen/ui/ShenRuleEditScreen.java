@@ -1,16 +1,16 @@
 package bai.god.shen.ui;
 
 import bai.god.shen.*;
-import net.minecraft.block.Block;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.resource.language.I18n;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.world.item.Item;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -31,8 +31,8 @@ public class ShenRuleEditScreen extends Screen {
     private int selectedConditionIndex = 0;
     private int selectedTargetIndex = 0;
     private int selectedEffectIndex = 0;
-    private TextFieldWidget customInput;
-    private TextFieldWidget nameInput;
+    private EditBox customInput;
+    private EditBox nameInput;
 
     private String dropdownCustomKey = "";
     /** 布局缓存：render() 复用 init() 的计算结果 */
@@ -44,7 +44,7 @@ public class ShenRuleEditScreen extends Screen {
     private boolean dirty = false;
 
     public ShenRuleEditScreen(Screen parent, ShenLaw law) {
-        super(Text.literal("编辑法则: " + law.name));
+        super(Component.literal("编辑法则: " + law.name));
         this.parent = parent;
         this.law = law;
         this.editingRule = new ShenRule(ShenEventType.PLAYER_RIGHT_CLICK,
@@ -57,7 +57,7 @@ public class ShenRuleEditScreen extends Screen {
 
     private void doRebuild() {
         this.dirty = false;
-        this.clearChildren();
+        this.clearWidgets();
         this.maxScroll = 0;
         this.init();
         // 在init之后裁剪scrollOffset（防止内容变少后scroll超出）
@@ -71,7 +71,7 @@ public class ShenRuleEditScreen extends Screen {
             scrollOffset = (int) Math.max(0, Math.min(maxScroll, scrollOffset - verticalAmount * 20));
             if (scrollOffset != oldOffset) {
                 this.dirty = false;
-                this.clearChildren();
+                this.clearWidgets();
                 this.init();
                 return true;
             }
@@ -108,15 +108,15 @@ public class ShenRuleEditScreen extends Screen {
             }
             final int idx = i;
             boolean isEditing = (idx == editingRuleIndex);
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal((isEditing ? "§a▶ " : "  ") + displayName),
+            this.addRenderableWidget(Button.builder(
+                    Component.literal((isEditing ? "§a▶ " : "  ") + displayName),
                     button -> {
                         syncCurrentParams();
                         this.editingRule.copyFrom(law.rules.get(idx));
                         this.editingRuleIndex = idx;
                         this.rebuild();
                     }
-            ).dimensions(8, y, ruleListW, 16).build());
+            ).bounds(8, y, ruleListW, 16).build());
             y += 18;
         }
 
@@ -128,14 +128,14 @@ public class ShenRuleEditScreen extends Screen {
                 boolean isSelected = (i == selectedEventIndex);
                 final int fi = i;
                 ShenEventType et = editingRule.eventTypes.get(i);
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + et.getDisplayName()),
+                this.addRenderableWidget(Button.builder(
+                        Component.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + et.getDisplayName()),
                         b -> { selectedEventIndex = fi; rebuild(); }
-                ).dimensions(8, y, nameBtnW, 14).build());
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§c✗"),
+                ).bounds(8, y, nameBtnW, 14).build());
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("§c✗"),
                         b -> { editingRule.eventTypes.remove(fi); if (selectedEventIndex >= editingRule.eventTypes.size()) selectedEventIndex = editingRule.eventTypes.size() - 1; rebuild(); }
-                ).dimensions(8 + nameBtnW, y, 14, 14).build());
+                ).bounds(8 + nameBtnW, y, 14, 14).build());
                 y += 15;
             }
             y += 3;
@@ -145,17 +145,17 @@ public class ShenRuleEditScreen extends Screen {
                 boolean isSelected = (i == selectedConditionIndex);
                 final int fi = i;
                 ShenRule.ShenCondition cond = editingRule.conditions.get(i);
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + cond.type.getDisplayName()),
+                this.addRenderableWidget(Button.builder(
+                        Component.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + cond.type.getDisplayName()),
                         b -> {
                             if (fi != selectedConditionIndex) loadConditionParams(fi);
                             rebuild();
                         }
-                ).dimensions(8, y, nameBtnW, 14).build());
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§c✗"),
+                ).bounds(8, y, nameBtnW, 14).build());
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("§c✗"),
                         b -> { editingRule.conditions.remove(fi); if (selectedConditionIndex >= editingRule.conditions.size()) selectedConditionIndex = editingRule.conditions.size() - 1; rebuild(); }
-                ).dimensions(8 + nameBtnW, y, 14, 14).build());
+                ).bounds(8 + nameBtnW, y, 14, 14).build());
                 y += 15;
             }
             y += 3;
@@ -165,14 +165,14 @@ public class ShenRuleEditScreen extends Screen {
                 boolean isSelected = (i == selectedTargetIndex);
                 final int fi = i;
                 ShenTargetType tt = editingRule.targetTypes.get(i);
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + tt.getDisplayName()),
+                this.addRenderableWidget(Button.builder(
+                        Component.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + tt.getDisplayName()),
                         b -> { selectedTargetIndex = fi; rebuild(); }
-                ).dimensions(8, y, nameBtnW, 14).build());
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§c✗"),
+                ).bounds(8, y, nameBtnW, 14).build());
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("§c✗"),
                         b -> { editingRule.targetTypes.remove(fi); if (selectedTargetIndex >= editingRule.targetTypes.size()) selectedTargetIndex = editingRule.targetTypes.size() - 1; rebuild(); }
-                ).dimensions(8 + nameBtnW, y, 14, 14).build());
+                ).bounds(8 + nameBtnW, y, 14, 14).build());
                 y += 15;
             }
             y += 3;
@@ -186,17 +186,17 @@ public class ShenRuleEditScreen extends Screen {
                 }
                 boolean isSelected = (i == selectedEffectIndex);
                 final int fi = i;
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + entry.effectType.getDisplayName() + delayLabel),
+                this.addRenderableWidget(Button.builder(
+                        Component.literal((isSelected ? "§a▶ " : "  ") + "§7[" + i + "]§r " + entry.effectType.getDisplayName() + delayLabel),
                         b -> {
                             if (fi != selectedEffectIndex) loadEffectParams(fi);
                             rebuild();
                         }
-                ).dimensions(8, y, nameBtnW, 14).build());
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§c✗"),
+                ).bounds(8, y, nameBtnW, 14).build());
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("§c✗"),
                         b -> { editingRule.effects.remove(fi); if (selectedEffectIndex >= editingRule.effects.size()) selectedEffectIndex = editingRule.effects.size() - 1; rebuild(); }
-                ).dimensions(8 + nameBtnW, y, 14, 14).build());
+                ).bounds(8 + nameBtnW, y, 14, 14).build());
                 y += 15;
             }
             y += 3;
@@ -223,8 +223,8 @@ public class ShenRuleEditScreen extends Screen {
             effectLabel = "§d[效果] " + (editingRule.effects.isEmpty() ? "无" : editingRule.effects.size() + "个") + (multiEffectMode ? " §e⛓多" : " §7⚡单");
         }
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal(eventLabel),
+        this.addRenderableWidget(Button.builder(
+                Component.literal(eventLabel),
                 button -> {
                     if (selectedSlot == 0) {
                         eventMultiMode = !eventMultiMode;
@@ -241,10 +241,10 @@ public class ShenRuleEditScreen extends Screen {
                     }
                     rebuild();
                 }
-        ).dimensions(selectorStartX, topSlotY, topSlotW, 18).build());
+        ).bounds(selectorStartX, topSlotY, topSlotW, 18).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal(condLabel),
+        this.addRenderableWidget(Button.builder(
+                Component.literal(condLabel),
                 button -> {
                     if (selectedSlot == 1) {
                         conditionMultiMode = !conditionMultiMode;
@@ -260,10 +260,10 @@ public class ShenRuleEditScreen extends Screen {
                     }
                     rebuild();
                 }
-        ).dimensions(selectorStartX + (topSlotW + gap), topSlotY, topSlotW, 18).build());
+        ).bounds(selectorStartX + (topSlotW + gap), topSlotY, topSlotW, 18).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal(targetLabel),
+        this.addRenderableWidget(Button.builder(
+                Component.literal(targetLabel),
                 button -> {
                     if (selectedSlot == 2) {
                         targetMultiMode = !targetMultiMode;
@@ -280,10 +280,10 @@ public class ShenRuleEditScreen extends Screen {
                     }
                     rebuild();
                 }
-        ).dimensions(selectorStartX + (topSlotW + gap) * 2, topSlotY, topSlotW, 18).build());
+        ).bounds(selectorStartX + (topSlotW + gap) * 2, topSlotY, topSlotW, 18).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal(effectLabel),
+        this.addRenderableWidget(Button.builder(
+                Component.literal(effectLabel),
                 button -> {
                     if (selectedSlot == 3) {
                         multiEffectMode = !multiEffectMode;
@@ -300,32 +300,32 @@ public class ShenRuleEditScreen extends Screen {
                     }
                     rebuild();
                 }
-        ).dimensions(selectorStartX + (topSlotW + gap) * 3, topSlotY, topSlotW, 18).build());
+        ).bounds(selectorStartX + (topSlotW + gap) * 3, topSlotY, topSlotW, 18).build());
 
         int nameInputY = 48;
         if (sw > 400) {
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§6[名称]"),
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("§6[名称]"),
                     b -> {}
-            ).dimensions(selectorStartX, nameInputY, 40, 16).build());
+            ).bounds(selectorStartX, nameInputY, 40, 16).build());
         }
 
         int nameFieldW = Math.min(200, Math.max(60, sw - selectorStartX - (sw > 400 ? 50 : 10)));
         if (this.nameInput == null) {
-            this.nameInput = new TextFieldWidget(this.textRenderer,
-                    selectorStartX + (sw > 400 ? 42 : 0), nameInputY, nameFieldW, 16, Text.literal("规则名称（留空自动生成）"));
+            this.nameInput = new EditBox(this.font,
+                    selectorStartX + (sw > 400 ? 42 : 0), nameInputY, nameFieldW, 16, Component.literal("规则名称（留空自动生成）"));
             this.nameInput.setMaxLength(32);
-            this.nameInput.setText(editingRule.name);
-            this.nameInput.setChangedListener(text -> editingRule.name = text);
+            this.nameInput.setValue(editingRule.name);
+            this.nameInput.setResponder(text -> editingRule.name = text);
         } else {
-            String currentText = this.nameInput.getText();
-            this.nameInput = new TextFieldWidget(this.textRenderer,
-                    selectorStartX + (sw > 400 ? 42 : 0), nameInputY, nameFieldW, 16, Text.literal("规则名称（留空自动生成）"));
+            String currentText = this.nameInput.getValue();
+            this.nameInput = new EditBox(this.font,
+                    selectorStartX + (sw > 400 ? 42 : 0), nameInputY, nameFieldW, 16, Component.literal("规则名称（留空自动生成）"));
             this.nameInput.setMaxLength(32);
-            this.nameInput.setText(currentText);
-            this.nameInput.setChangedListener(text -> editingRule.name = text);
+            this.nameInput.setValue(currentText);
+            this.nameInput.setResponder(text -> editingRule.name = text);
         }
-        this.addDrawableChild(this.nameInput);
+        this.addRenderableWidget(this.nameInput);
 
         int scrollViewTop = (sw < 500) ? 65 : 70;
         int scrollViewBottom = sh - 50;
@@ -345,13 +345,13 @@ public class ShenRuleEditScreen extends Screen {
             int paramBtnX = 8;
             int paramBtnY = Math.min(y + 5, listBottom - 30);
             if (paramBtnY > 50 && paramBtnY + 24 < sh - 35) {
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§6⚙ 配置参数 (" + paramDefs.size() + "项)"),
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("§6⚙ 配置参数 (" + paramDefs.size() + "项)"),
                         button -> {
                             syncCurrentParams();
                             Map<String, String> paramsCopy = new HashMap<>(getCurrentParams());
-                            if (this.client != null) {
-                                this.client.setScreen(new bai.god.shen.ui.ShenParamConfigScreen(
+                            if (this.minecraft != null) {
+                                this.minecraft.setScreen(new bai.god.shen.ui.ShenParamConfigScreen(
                                         this,
                                         summary,
                                         paramDefs,
@@ -360,7 +360,7 @@ public class ShenRuleEditScreen extends Screen {
                                 ));
                             }
                         }
-                ).dimensions(paramBtnX, paramBtnY, paramBtnWidth, 20).build());
+                ).bounds(paramBtnX, paramBtnY, paramBtnWidth, 20).build());
             }
         }
 
@@ -370,7 +370,7 @@ public class ShenRuleEditScreen extends Screen {
 
         String saveLabel = (editingRuleIndex >= 0 && editingRuleIndex < law.rules.size())
                 ? "§a✓ 更新规则" : "§a+ 添加规则";
-        this.addDrawableChild(ButtonWidget.builder(Text.literal(saveLabel), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal(saveLabel), button -> {
             syncConditionParams();
             syncEffectDelay();
             int savedScroll = scrollOffset;
@@ -383,9 +383,9 @@ public class ShenRuleEditScreen extends Screen {
             bai.god.shen.ShenNetwork.sendSaveLaw(law);
             rebuild();
             scrollOffset = savedScroll; // 恢复滚动位置，避免跳回顶部
-        }).dimensions(saveBtnX, bottomY, bottomBtnW, 18).build());
+        }).bounds(saveBtnX, bottomY, bottomBtnW, 18).build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§c删除选中"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§c删除选中"), button -> {
             if (editingRuleIndex >= 0 && editingRuleIndex < law.rules.size()) {
                 law.rules.remove(editingRuleIndex);
                 bai.god.shen.ShenNetwork.sendSaveLaw(law);
@@ -397,9 +397,9 @@ public class ShenRuleEditScreen extends Screen {
                 editingRuleIndex = -1;
                 this.rebuild();
             }
-        }).dimensions(saveBtnX - bottomBtnW - 5, bottomY, bottomBtnW, 18).build());
+        }).bounds(saveBtnX - bottomBtnW - 5, bottomY, bottomBtnW, 18).build());
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("§c返回"), button -> {
+        this.addRenderableWidget(Button.builder(Component.literal("§c返回"), button -> {
             syncCurrentParams();
             if (editingRuleIndex >= 0 && editingRuleIndex < law.rules.size()) {
                 law.rules.set(editingRuleIndex, editingRule);
@@ -408,8 +408,8 @@ public class ShenRuleEditScreen extends Screen {
                 editingRuleIndex = law.rules.indexOf(editingRule);
             }
             bai.god.shen.ShenNetwork.sendSaveLaw(law);
-            if (this.client != null) this.client.setScreen(parent);
-        }).dimensions(saveBtnX + bottomBtnW + 5, bottomY, bottomBtnW, 18).build());
+            if (this.minecraft != null) this.minecraft.setScreen(parent);
+        }).bounds(saveBtnX + bottomBtnW + 5, bottomY, bottomBtnW, 18).build());
     }
 
     private int calcVirtualCategoryHeight(int startY, int sw) {
@@ -561,7 +561,7 @@ public class ShenRuleEditScreen extends Screen {
                                                         int scrollOffset, int viewTop, int viewBottom,
                                                         T[] allValues, Function<T, String> categoryFn,
                                                         Function<T, String> displayFn,
-                                                        Function<T, Text> toTextFn,
+                                                        Function<T, Component> toTextFn,
                                                         Consumer<T> onClick) {
         int buttonWidth = Math.min(130, Math.max(50, (sw - startX - 15) / cols - 3));
         int buttonHeight = 18;
@@ -596,10 +596,10 @@ public class ShenRuleEditScreen extends Screen {
             boolean catVisible = (renderedY + categoryHeight > viewTop && renderedY < viewBottom);
 
             if (catVisible) {
-                this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§6§l" + category),
+                this.addRenderableWidget(Button.builder(
+                        Component.literal("§6§l" + category),
                         b -> {}
-                ).dimensions(startX, renderedY, buttonWidth * Math.min(cols, items.size()) + 5, buttonHeight - 2).build());
+                ).bounds(startX, renderedY, buttonWidth * Math.min(cols, items.size()) + 5, buttonHeight - 2).build());
 
                 int itemY = renderedY + buttonHeight;
                 int col = 0;
@@ -614,10 +614,10 @@ public class ShenRuleEditScreen extends Screen {
 
                     int btnY = itemY + (i / cols) * (buttonHeight + 2);
                     if (btnY + buttonHeight > viewTop && btnY < viewBottom) {
-                        this.addDrawableChild(ButtonWidget.builder(
-                                Text.literal(prefix + display),
+                        this.addRenderableWidget(Button.builder(
+                                Component.literal(prefix + display),
                                 b -> onClick.accept(item)
-                        ).dimensions(startX + col * (buttonWidth + 3), btnY, buttonWidth, buttonHeight).build());
+                        ).bounds(startX + col * (buttonWidth + 3), btnY, buttonWidth, buttonHeight).build());
                     }
 
                     col++;
@@ -635,7 +635,7 @@ public class ShenRuleEditScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         // 延迟重建：避免在 Minecraft 事件处理中直接修改 children 列表
         if (dirty) {
             doRebuild();
@@ -648,18 +648,18 @@ public class ShenRuleEditScreen extends Screen {
         int sw = this.width;
         int sh = this.height;
 
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, sw / 2, 10, 0xFFFFFF);
+        context.drawCenteredString(this.font, this.title, sw / 2, 10, 0xFFFFFF);
 
         if (!law.rules.isEmpty()) {
-            context.drawTextWithShadow(this.textRenderer,
-                    Text.literal("§e已有规则:"),
+            context.drawString(this.font,
+                    Component.literal("§e已有规则:"),
                     10, 32, 0xAAAAAA);
         }
 
         if (maxScroll > 0) {
             String scrollHint = scrollOffset > 0 ? "§7▲ 滚轮上下滚动 ▼" : "§7▼ 滚轮向下滚动 ▼";
-            context.drawCenteredTextWithShadow(this.textRenderer,
-                    Text.literal(scrollHint),
+            context.drawCenteredString(this.font,
+                    Component.literal(scrollHint),
                     sw / 2, sh - 10, 0x666666);
         }
     }
@@ -1137,31 +1137,31 @@ public class ShenRuleEditScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.client != null && hasControlDown()) {
+        if (this.minecraft != null && hasControlDown()) {
             var focused = this.getFocused();
-            if (focused instanceof TextFieldWidget tf) {
+            if (focused instanceof EditBox tf) {
                 if (keyCode == 86) {
-                    String clipboard = this.client.keyboard.getClipboard();
+                    String clipboard = this.minecraft.keyboardHandler.getClipboard();
                     if (clipboard != null) {
                         pasteIntoTextField(tf, clipboard);
                     }
                     return true;
                 } else if (keyCode == 67) {
-                    String selected = tf.getSelectedText();
+                    String selected = getSelectedText(tf);
                     if (selected != null && !selected.isEmpty()) {
-                        this.client.keyboard.setClipboard(selected);
+                        this.minecraft.keyboardHandler.setClipboard(selected);
                     }
                     return true;
                 } else if (keyCode == 88) {
-                    String selected = tf.getSelectedText();
+                    String selected = getSelectedText(tf);
                     if (selected != null && !selected.isEmpty()) {
-                        this.client.keyboard.setClipboard(selected);
+                        this.minecraft.keyboardHandler.setClipboard(selected);
                         pasteIntoTextField(tf, "");
                     }
                     return true;
                 } else if (keyCode == 65) {
-                    tf.setSelectionStart(0);
-                    tf.setSelectionEnd(tf.getText().length());
+                    tf.setCursorPosition(0);
+                    tf.setHighlightPos(tf.getValue().length());
                     return true;
                 }
             }
@@ -1174,7 +1174,11 @@ public class ShenRuleEditScreen extends Screen {
         return false;
     }
 
-    private void pasteIntoTextField(TextFieldWidget tf, String content) {
-        tf.write(content);
+    private static String getSelectedText(EditBox tf) {
+        return tf.getHighlighted();
+    }
+
+    private void pasteIntoTextField(EditBox tf, String content) {
+        tf.insertText(content);
     }
 }

@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+issueTrackerURL=""
+
+# 服务端必装 · 客户端选装 (BOTH)
+# 规则引擎在服务端执行，服务端必须安装本模组。
+# 客户端为可选：装了可打开规则界面编辑法则、使用全部功能；
+# 未装也能正常进入服务器游玩（不影响进出），只是无法使用本模组功能。
+
+[[mods]]
+modId="god"
+version="${file.jarVersion}"
+displayName="God Shen (言出法随) [服务端必装·客户端选装]"
+logoFile="god.png"
+credits="Port to Forge by bai"
+authors="bai"
+description='''言出法随 —— 规则 = 事件 + 条件 + 目标 + 效果，可自由组合成自定义法则。
+【服务端必装，客户端选装】规则引擎在服务端执行，服务端必须装本模组；
+客户端装了即可打开规则界面编辑法则、使用全部功能；客户端不装也能正常进入服务器，只是用不了本模组功能。
+支持第三方模组内容自动适配（实体/物品/效果/NBT 路径），并对神秘复苏（smfs）做了深度集成。'''
+
+[[dependencies.god]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.god]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"

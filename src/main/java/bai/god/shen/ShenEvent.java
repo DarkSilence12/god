@@ -1,8 +1,8 @@
 package bai.god.shen;
 
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,21 +12,21 @@ public class ShenEvent {
     public final LivingEntity source;
     public final LivingEntity target;
     public final BlockPos pos;
-    public final World world;
+    public final Level world;
     public final String chatMessage;
     public ShenRule rule;
     public int loopCount = 0;
     public final Map<String, String> params = new HashMap<>();
 
-    public ShenEvent(ShenEventType type, LivingEntity source, BlockPos pos, World world) {
+    public ShenEvent(ShenEventType type, LivingEntity source, BlockPos pos, Level world) {
         this(type, source, null, pos, world, "");
     }
 
-    public ShenEvent(ShenEventType type, LivingEntity source, LivingEntity target, BlockPos pos, World world) {
+    public ShenEvent(ShenEventType type, LivingEntity source, LivingEntity target, BlockPos pos, Level world) {
         this(type, source, target, pos, world, "");
     }
 
-    public ShenEvent(ShenEventType type, LivingEntity source, LivingEntity target, BlockPos pos, World world, String chatMessage) {
+    public ShenEvent(ShenEventType type, LivingEntity source, LivingEntity target, BlockPos pos, Level world, String chatMessage) {
         this.type = type;
         this.source = source;
         this.target = target;

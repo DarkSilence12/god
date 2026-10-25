@@ -1,8 +1,8 @@
 package bai.god.shen;
 
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +53,7 @@ public class ShenEventBus {
         }
     }
 
-    public static void fire(ShenEventType eventType, LivingEntity source, BlockPos pos, World world) {
+    public static void fire(ShenEventType eventType, LivingEntity source, BlockPos pos, Level world) {
         fire(new ShenEvent(eventType, source, pos, world) {});
     }
 

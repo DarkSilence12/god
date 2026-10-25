@@ -1,8 +1,8 @@
 package bai.god.shen;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,13 +33,13 @@ public class ShenLaw {
         return rules.contains(rule);
     }
 
-    public NbtCompound toNbt() {
-        NbtCompound nbt = new NbtCompound();
+    public CompoundTag toNbt() {
+        CompoundTag nbt = new CompoundTag();
         nbt.putString("name", name);
         nbt.putString("description", description);
         nbt.putBoolean("enabled", enabled);
 
-        NbtList ruleList = new NbtList();
+        ListTag ruleList = new ListTag();
         for (ShenRule rule : rules) {
             ruleList.add(rule.toNbt());
         }
@@ -48,13 +48,13 @@ public class ShenLaw {
         return nbt;
     }
 
-    public static ShenLaw fromNbt(NbtCompound nbt) {
+    public static ShenLaw fromNbt(CompoundTag nbt) {
         ShenLaw law = new ShenLaw();
         law.name = nbt.getString("name");
         law.description = nbt.getString("description");
         law.enabled = nbt.getBoolean("enabled");
 
-        NbtList ruleList = nbt.getList("rules", NbtElement.COMPOUND_TYPE);
+        ListTag ruleList = nbt.getList("rules", Tag.TAG_COMPOUND);
         for (int i = 0; i < ruleList.size(); i++) {
             law.rules.add(ShenRule.fromNbt(ruleList.getCompound(i)));
         }
