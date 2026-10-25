@@ -1,9 +1,11 @@
 pluginManagement {
     repositories {
-        gradlePluginPortal()
+        maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+        maven { name = 'Forge'; url = 'https://maven.minecraftforge.net/' }
         mavenCentral()
-        maven { url = 'https://maven.minecraftforge.net/' }
+        gradlePluginPortal()
     }
 }
 
 rootProject.name = 'god'
+include 'fabric', 'forge'

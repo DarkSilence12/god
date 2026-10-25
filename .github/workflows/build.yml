@@ -1,7 +1,4 @@
-# Automatically build the project and run any configured tests for every push
-# and submitted pull request. This can help catch issues that only occur on
-# certain platforms or Java versions, and provides a first line of defence
-# against bad commits.
+# 一套源码，两个加载器：Fabric + Forge 同时构建
 
 name: build
 on: [pull_request, push]
@@ -17,14 +14,19 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v5
         with:
-          java-version: '25'
+          java-version: '17'
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build
-      - name: capture build artifacts
+      - name: capture fabric artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Artifacts
-          path: build/libs/
+          name: god-fabric
+          path: fabric/build/libs/*.jar
+      - name: capture forge artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: god-forge
+          path: forge/build/libs/*.jar

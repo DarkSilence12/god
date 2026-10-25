@@ -6,6 +6,7 @@ out/
 classes/
 
 # 打包产物全部不入库，发布用 jar 通过 GitHub Release 提供
+dist/
 
 # 参考源码（鬼域模组），不属于本仓库的源码，不公开
 

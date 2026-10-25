@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"package": "bai.god.fabric.mixin",
+	"compatibilityLevel": "JAVA_17",
+	"mixins": [
+		"LivingEntityKnockbackMixin",
+		"ProjectileImpactMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

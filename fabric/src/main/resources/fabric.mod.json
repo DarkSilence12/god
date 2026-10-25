@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "god",
+	"version": "${version}",
+	"name": "言出法随",
+	"description": "言出法随 —— 规则 = 事件 + 条件 + 目标 + 效果，可自由组合成自定义法则。兼容第三方模组内容，并深度集成神秘复苏。",
+	"authors": [
+		"sxkb"
+	],
+	"license": "CC0-1.0",
+	"icon": "assets/god/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"bai.god.fabric.GodFabric"
+		],
+		"client": [
+			"bai.god.fabric.GodFabricClient"
+		]
+	},
+	"mixins": [
+		"god.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.15.0",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"smfs": ">=1.3.6"
+	}
+}

@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="CC0-1.0"
+
+[[mods]]
+modId="god"
+version="${file.jarVersion}"
+displayName="言出法随"
+logoFile="god.png"
+authors="sxkb"
+description='''言出法随 —— 规则 = 事件 + 条件 + 目标 + 效果，可自由组合成自定义法则。
+支持第三方模组内容自动适配（实体/物品/效果/NBT 路径），并对神秘复苏（smfs）做了深度集成。
+服务端必须安装（规则引擎在服务端执行）；客户端安装后可打开规则界面编辑法则。'''
+
+[[dependencies.god]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.god]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
