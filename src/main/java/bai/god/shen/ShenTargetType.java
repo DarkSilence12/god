@@ -1,6 +1,6 @@
 package bai.god.shen;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public enum ShenTargetType {
     EVENT_SOURCE("事件源", "触发事件的实体"),
@@ -30,7 +30,7 @@ public enum ShenTargetType {
         return displayName;
     }
 
-    public Text toText() {
-        return Text.literal(category + " · " + displayName);
+    public Component toText() {
+        return Component.literal(category + " · " + displayName);
     }
 }

@@ -1,6 +1,6 @@
 package bai.god.support;
 
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * 金色鬼眼被动（鬼域模组功能）兼容占位实现。
@@ -13,7 +13,7 @@ public final class GoldenGhostEyePassiveHandler {
     private GoldenGhostEyePassiveHandler() {
     }
 
-    public static boolean isGoldenGhostEyeMain(PlayerEntity player) {
+    public static boolean isGoldenGhostEyeMain(Player player) {
         return false;
     }
 }

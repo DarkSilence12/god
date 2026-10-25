@@ -1,12 +1,12 @@
 package bai.god.shen.ui;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +22,7 @@ public class RegistrySelectionScreen extends Screen {
     private final Consumer<String> callback;
     private final String[][] allOptions;
 
-    private TextFieldWidget searchInput;
+    private EditBox searchInput;
     private String searchText = "";
     private int scrollOffset = 0;
 
@@ -30,7 +30,7 @@ public class RegistrySelectionScreen extends Screen {
 
     public RegistrySelectionScreen(Screen parent, ShenParamHelper.ParamDef def,
                                    String currentValue, Consumer<String> callback) {
-        super(Text.literal("选择 " + def.label));
+        super(Component.literal("选择 " + def.label));
         this.parent = parent;
         this.def = def;
         this.currentValue = currentValue;
@@ -59,10 +59,10 @@ public class RegistrySelectionScreen extends Screen {
     }
 
     private String[][] tryLoadDimensionOptions() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null) return null;
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null) return null;
         try {
-            DynamicRegistryManager registryManager = client.world.getRegistryManager();
+            RegistryAccess registryManager = client.level.registryAccess();
             return ShenParamHelper.buildDimensionOptionsFromRegistry(registryManager);
         } catch (Exception e) {
             return null;
@@ -70,10 +70,10 @@ public class RegistrySelectionScreen extends Screen {
     }
 
     private String[][] tryLoadDamageTypeOptions() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null) return null;
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.level == null) return null;
         try {
-            DynamicRegistryManager registryManager = client.world.getRegistryManager();
+            RegistryAccess registryManager = client.level.registryAccess();
             return ShenParamHelper.buildDamageTypeOptionsFromRegistry(registryManager);
         } catch (Exception e) {
             return null;
@@ -82,7 +82,7 @@ public class RegistrySelectionScreen extends Screen {
 
     public RegistrySelectionScreen(Screen parent, String title, String[][] options,
                                    String currentValue, Consumer<String> callback) {
-        super(Text.literal("选择 " + title));
+        super(Component.literal("选择 " + title));
         this.parent = parent;
         this.def = null;
         this.currentValue = currentValue;
@@ -105,41 +105,41 @@ public class RegistrySelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§c← 返回"),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§c← 返回"),
             button -> {
-                if (this.client != null) this.client.setScreen(parent);
+                if (this.minecraft != null) this.minecraft.setScreen(parent);
             }
-        ).dimensions(10, 8, 60, 20).build());
+        ).bounds(10, 8, 60, 20).build());
 
         String titleLabel = (def != null) ? def.label : "选项";
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§6§l选择 " + titleLabel),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§6§l选择 " + titleLabel),
             b -> {}
-        ).dimensions(80, 8, 200, 20).build());
+        ).bounds(80, 8, 200, 20).build());
 
         int totalCount = allOptions.length;
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§7共 " + totalCount + " 项"),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§7共 " + totalCount + " 项"),
             b -> {}
-        ).dimensions(this.width - 120, 8, 110, 20).build());
+        ).bounds(this.width - 120, 8, 110, 20).build());
 
         if (searchInput == null) {
-            searchInput = new TextFieldWidget(this.textRenderer,
-                10, 36, this.width - 20, 20, Text.literal("搜索中文名或ID..."));
+            searchInput = new EditBox(this.font,
+                10, 36, this.width - 20, 20, Component.literal("搜索中文名或ID..."));
             searchInput.setMaxLength(64);
-            searchInput.setText(searchText);
-            searchInput.setChangedListener(text -> {
+            searchInput.setValue(searchText);
+            searchInput.setResponder(text -> {
                 searchText = text;
                 scrollOffset = 0;
                 updateFilteredOptions();
             });
         }
-        this.addDrawableChild(searchInput);
+        this.addRenderableWidget(searchInput);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context);
         super.render(context, mouseX, mouseY, delta);
 
@@ -169,33 +169,33 @@ public class RegistrySelectionScreen extends Screen {
             String display = prefix + "§7" + numStr + " §f" + opt[0];
             String idHint = " §8(" + opt[1] + ")";
 
-            context.drawText(this.textRenderer,
-                Text.literal(display),
+            context.drawString(this.font,
+                Component.literal(display),
                 15, y + 5, 0xFFFFFF, true);
 
-            int idWidth = this.textRenderer.getWidth(idHint);
-            context.drawText(this.textRenderer,
-                Text.literal(idHint),
+            int idWidth = this.font.width(idHint);
+            context.drawString(this.font,
+                Component.literal(idHint),
                 this.width - 15 - idWidth, y + 5, 0x888888, false);
         }
 
         if (scrollOffset > 0) {
             String upText = "▲ 还有 " + scrollOffset + " 项 (滚轮向上)";
-            int tw = this.textRenderer.getWidth(upText);
-            context.drawText(this.textRenderer, upText,
+            int tw = this.font.width(upText);
+            context.drawString(this.font, upText,
                 (this.width - tw) / 2, startY - 12, 0x888888, false);
         }
         if (end < filteredOptions.size()) {
             String downText = "▼ 还有 " + (filteredOptions.size() - end) + " 项 (滚轮向下)";
-            int tw = this.textRenderer.getWidth(downText);
-            context.drawText(this.textRenderer, downText,
+            int tw = this.font.width(downText);
+            context.drawString(this.font, downText,
                 (this.width - tw) / 2, startY + actualListHeight + 6, 0x888888, false);
         }
 
         if (filteredOptions.isEmpty() && !searchText.isEmpty()) {
-            Text msg = Text.literal("§c未找到匹配 \"" + searchText + "\"");
-            context.drawText(this.textRenderer, msg,
-                this.width / 2 - this.textRenderer.getWidth(msg) / 2,
+            Component msg = Component.literal("§c未找到匹配 \"" + searchText + "\"");
+            context.drawString(this.font, msg,
+                this.width / 2 - this.font.width(msg) / 2,
                 startY + 10, 0xFFFFFF, true);
         }
     }
@@ -217,7 +217,7 @@ public class RegistrySelectionScreen extends Screen {
             if (mouseX >= 10 && mouseX <= this.width - 10 && mouseY >= y && mouseY <= yEnd) {
                 String selectedValue = filteredOptions.get(i)[1];
                 callback.accept(selectedValue);
-                if (this.client != null) this.client.setScreen(parent);
+                if (this.minecraft != null) this.minecraft.setScreen(parent);
                 return true;
             }
         }
@@ -227,31 +227,31 @@ public class RegistrySelectionScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.client != null && hasControlDown()) {
+        if (this.minecraft != null && hasControlDown()) {
             var focused = this.getFocused();
-            if (focused instanceof TextFieldWidget tf) {
+            if (focused instanceof EditBox tf) {
                 if (keyCode == 86) {
-                    String clipboard = this.client.keyboard.getClipboard();
+                    String clipboard = this.minecraft.keyboardHandler.getClipboard();
                     if (clipboard != null) {
                         pasteIntoTextField(tf, clipboard);
                     }
                     return true;
                 } else if (keyCode == 67) {
-                    String selected = tf.getSelectedText();
+                    String selected = getSelectedText(tf);
                     if (selected != null && !selected.isEmpty()) {
-                        this.client.keyboard.setClipboard(selected);
+                        this.minecraft.keyboardHandler.setClipboard(selected);
                     }
                     return true;
                 } else if (keyCode == 88) {
-                    String selected = tf.getSelectedText();
+                    String selected = getSelectedText(tf);
                     if (selected != null && !selected.isEmpty()) {
-                        this.client.keyboard.setClipboard(selected);
+                        this.minecraft.keyboardHandler.setClipboard(selected);
                         pasteIntoTextField(tf, "");
                     }
                     return true;
                 } else if (keyCode == 65) {
-                    tf.setSelectionStart(0);
-                    tf.setSelectionEnd(tf.getText().length());
+                    tf.setCursorPosition(0);
+                    tf.setHighlightPos(tf.getValue().length());
                     return true;
                 }
             }
@@ -264,8 +264,12 @@ public class RegistrySelectionScreen extends Screen {
         return false;
     }
 
-    private void pasteIntoTextField(TextFieldWidget tf, String content) {
-        tf.write(content);
+    private static String getSelectedText(EditBox tf) {
+        return tf.getHighlighted();
+    }
+
+    private void pasteIntoTextField(EditBox tf, String content) {
+        tf.insertText(content);
     }
 
     @Override

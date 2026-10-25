@@ -5,15 +5,22 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 神秘复苏自动适配器
@@ -71,7 +78,7 @@ public class SmfsAdapter {
         ghostEntities.clear();
         ghostChineseNames.clear();
 
-        Registries.ENTITY_TYPE.getIds().stream()
+        BuiltInRegistries.ENTITY_TYPE.keySet().stream()
             .filter(id -> id.getNamespace().equals(MOD_ID))
             .forEach(id -> {
                 ghostEntities.add(id.toString());
@@ -86,7 +93,7 @@ public class SmfsAdapter {
         smfsEffects.clear();
         effectChineseNames.clear();
 
-        Registries.STATUS_EFFECT.getIds().stream()
+        BuiltInRegistries.MOB_EFFECT.keySet().stream()
             .filter(id -> id.getNamespace().equals(MOD_ID))
             .forEach(id -> {
                 smfsEffects.add(id.toString());
@@ -101,7 +108,7 @@ public class SmfsAdapter {
         smfsItems.clear();
         itemChineseNames.clear();
 
-        Registries.ITEM.getIds().stream()
+        BuiltInRegistries.ITEM.keySet().stream()
             .filter(id -> id.getNamespace().equals(MOD_ID))
             .forEach(id -> {
                 String idStr = id.toString();
@@ -269,7 +276,7 @@ public class SmfsAdapter {
         }
     }
 
-    private static String tryGetChineseName(Identifier id) {
+    private static String tryGetChineseName(ResourceLocation id) {
         String path = id.getPath();
 
         Map<String, String> knownNames = new LinkedHashMap<>();
@@ -364,19 +371,19 @@ public class SmfsAdapter {
         return path.replace('_', ' ');
     }
 
-    public static List<Identifier> getGhostEntityIds() {
-        List<Identifier> ids = new ArrayList<>();
+    public static List<ResourceLocation> getGhostEntityIds() {
+        List<ResourceLocation> ids = new ArrayList<>();
         for (String id : ghostEntities) {
-            Identifier identifier = Identifier.tryParse(id);
+            ResourceLocation identifier = ResourceLocation.tryParse(id);
             if (identifier != null) ids.add(identifier);
         }
         return ids;
     }
 
-    public static List<Identifier> getEffectIds() {
-        List<Identifier> ids = new ArrayList<>();
+    public static List<ResourceLocation> getEffectIds() {
+        List<ResourceLocation> ids = new ArrayList<>();
         for (String id : smfsEffects) {
-            Identifier identifier = Identifier.tryParse(id);
+            ResourceLocation identifier = ResourceLocation.tryParse(id);
             if (identifier != null) ids.add(identifier);
         }
         return ids;
@@ -400,19 +407,19 @@ public class SmfsAdapter {
         }
     }
 
-    public static boolean hasTamedGhost(PlayerEntity player, String ghostType) {
+    public static boolean hasTamedGhost(Player player, String ghostType) {
         return bai.god.support.smfs.SmfsAPIWrapper.hasTamedGhost(player, ghostType);
     }
 
-    public static int getSpiritualPower(PlayerEntity player) {
+    public static int getSpiritualPower(Player player) {
         return bai.god.support.smfs.SmfsAPIWrapper.getSpiritualPower(player);
     }
 
-    public static boolean isGhostDomainActive(PlayerEntity player) {
+    public static boolean isGhostDomainActive(Player player) {
         return bai.god.support.smfs.SmfsAPIWrapper.isGhostDomainActive(player);
     }
 
-    public static boolean hasGhostDomain(PlayerEntity player, String domainColor) {
+    public static boolean hasGhostDomain(Player player, String domainColor) {
         switch (domainColor.toLowerCase()) {
             case "red": return bai.god.support.smfs.SmfsAPIWrapper.hasRedGhostDomain(player);
             case "green": return bai.god.support.smfs.SmfsAPIWrapper.hasGreenGhostDomain(player);
@@ -429,7 +436,7 @@ public class SmfsAdapter {
     private static Map<String, String> scanGhostEntities() {
         Map<String, String> result = new LinkedHashMap<>();
         try {
-            Registries.ENTITY_TYPE.getIds().stream()
+            BuiltInRegistries.ENTITY_TYPE.keySet().stream()
                 .filter(id -> id.getNamespace().equals(MOD_ID))
                 .forEach(id -> {
                     String chineseName = tryGetChineseName(id);
@@ -445,17 +452,17 @@ public class SmfsAdapter {
         List<String[]> result = new ArrayList<>();
         result.add(new String[]{"§7无", ""});
         Set<String> added = new HashSet<>();
-        for (Identifier id : Registries.ENTITY_TYPE.getIds()) {
+        for (ResourceLocation id : BuiltInRegistries.ENTITY_TYPE.keySet()) {
             String idStr = id.toString();
             if (added.contains(idStr)) continue;
             boolean isSmfsEntity = id.getNamespace().equals(MOD_ID)
                 || id.getPath().contains("ghost")
                 || id.getPath().contains("smfs");
             if (!isSmfsEntity) continue;
-            var entityType = Registries.ENTITY_TYPE.get(id);
+            var entityType = BuiltInRegistries.ENTITY_TYPE.get(id);
             if (entityType == null) continue;
-            String cnName = Text.translatable(entityType.getTranslationKey()).getString();
-            if (cnName.equals(entityType.getTranslationKey())) {
+            String cnName = Component.translatable(entityType.getDescriptionId()).getString();
+            if (cnName.equals(entityType.getDescriptionId())) {
                 cnName = tryGetChineseName(id);
             }
             added.add(idStr);
@@ -467,7 +474,7 @@ public class SmfsAdapter {
     private static List<String> scanGhostItems() {
         List<String> result = new ArrayList<>();
         try {
-            Registries.ITEM.getIds().stream()
+            BuiltInRegistries.ITEM.keySet().stream()
                 .filter(id -> id.getNamespace().equals(MOD_ID))
                 .forEach(id -> result.add(id.toString()));
         } catch (Exception e) {
@@ -481,17 +488,17 @@ public class SmfsAdapter {
         result.add(new String[]{"§7无", ""});
 
         Set<String> added = new HashSet<>();
-        for (Identifier id : Registries.ITEM.getIds()) {
+        for (ResourceLocation id : BuiltInRegistries.ITEM.keySet()) {
             String idStr = id.toString();
             if (added.contains(idStr)) continue;
             boolean isSmfsItem = id.getNamespace().equals(MOD_ID)
                 || id.getPath().contains("ghost")
                 || id.getPath().contains("smfs");
             if (!isSmfsItem) continue;
-            net.minecraft.item.Item item = Registries.ITEM.get(id);
+            Item item = BuiltInRegistries.ITEM.get(id);
             if (item == null) continue;
-            String cnName = Text.translatable(item.getTranslationKey()).getString();
-            if (cnName.equals(item.getTranslationKey())) {
+            String cnName = Component.translatable(item.getDescriptionId()).getString();
+            if (cnName.equals(item.getDescriptionId())) {
                 cnName = tryGetChineseName(id);
             }
             added.add(idStr);

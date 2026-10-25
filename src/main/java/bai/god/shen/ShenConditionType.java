@@ -1,6 +1,6 @@
 package bai.god.shen;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public enum ShenConditionType {
     HEALTH_COMPARE("属性比较", "生命值"),
@@ -83,7 +83,7 @@ public enum ShenConditionType {
         return displayName;
     }
 
-    public Text toText() {
-        return Text.literal(category + " · " + displayName);
+    public Component toText() {
+        return Component.literal(category + " · " + displayName);
     }
 }

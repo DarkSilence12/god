@@ -2,21 +2,20 @@ package bai.god.shen.ui;
 
 import bai.god.shen.ShenEffectType;
 import bai.god.shen.ShenTargetType;
-import net.minecraft.block.Block;
-import net.minecraft.client.resource.language.I18n;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemGroup;
-import net.minecraft.particle.ParticleType;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.item.Item;
+import net.minecraft.core.particles.ParticleType;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Registry;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.dimension.DimensionType;
 
 import java.util.*;
 
@@ -112,10 +111,10 @@ public class ShenParamHelper {
 
         switch (type) {
             case STATUS_EFFECT: {
-                for (StatusEffect effect : Registries.STATUS_EFFECT) {
-                    Identifier id = Registries.STATUS_EFFECT.getId(effect);
+                for (MobEffect effect : BuiltInRegistries.MOB_EFFECT) {
+                    ResourceLocation id = BuiltInRegistries.MOB_EFFECT.getKey(effect);
                     if (id == null) continue;
-                    String cnName = I18n.translate(effect.getTranslationKey());
+                    String cnName = I18n.get(effect.getDescriptionId());
                     // 避免显示奇怪的翻译键
                     if (cnName.startsWith("effect.") || cnName.startsWith("enchantment.")) continue;
                     result.add(new String[]{cnName, id.toString()});
@@ -123,11 +122,11 @@ public class ShenParamHelper {
                 break;
             }
             case ENTITY_TYPE: {
-                for (EntityType<?> entityType : Registries.ENTITY_TYPE) {
-                    Identifier id = Registries.ENTITY_TYPE.getId(entityType);
+                for (EntityType<?> entityType : BuiltInRegistries.ENTITY_TYPE) {
+                    ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
                     if (id == null) continue;
-                    String cnName = I18n.translate(entityType.getTranslationKey());
-                    String translationKey = entityType.getTranslationKey();
+                    String cnName = I18n.get(entityType.getDescriptionId());
+                    String translationKey = entityType.getDescriptionId();
                     if (cnName.equals(translationKey) || cnName.startsWith("entity.")) {
                         cnName = formatIdToName(id);
                     }
@@ -136,11 +135,11 @@ public class ShenParamHelper {
                 break;
             }
             case ITEM: {
-                for (Item item : Registries.ITEM) {
-                    Identifier id = Registries.ITEM.getId(item);
+                for (Item item : BuiltInRegistries.ITEM) {
+                    ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
                     if (id == null) continue;
-                    String cnName = I18n.translate(item.getTranslationKey());
-                    String translationKey = item.getTranslationKey();
+                    String cnName = I18n.get(item.getDescriptionId());
+                    String translationKey = item.getDescriptionId();
                     if (cnName.equals(translationKey) || cnName.startsWith("item.") || cnName.startsWith("block.")) {
                         cnName = formatIdToName(id);
                     }
@@ -149,11 +148,11 @@ public class ShenParamHelper {
                 break;
             }
             case BLOCK: {
-                for (Block block : Registries.BLOCK) {
-                    Identifier id = Registries.BLOCK.getId(block);
+                for (Block block : BuiltInRegistries.BLOCK) {
+                    ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
                     if (id == null) continue;
-                    String cnName = I18n.translate(block.getTranslationKey());
-                    String translationKey = block.getTranslationKey();
+                    String cnName = I18n.get(block.getDescriptionId());
+                    String translationKey = block.getDescriptionId();
                     if (cnName.equals(translationKey) || cnName.startsWith("block.")) {
                         cnName = formatIdToName(id);
                     }
@@ -163,8 +162,8 @@ public class ShenParamHelper {
             }
             case PARTICLE: {
                 java.util.Map<String, String> cnMap = buildChineseNameMap(PARTICLE_OPTIONS);
-                for (ParticleType<?> particle : Registries.PARTICLE_TYPE) {
-                    Identifier id = Registries.PARTICLE_TYPE.getId(particle);
+                for (ParticleType<?> particle : BuiltInRegistries.PARTICLE_TYPE) {
+                    ResourceLocation id = BuiltInRegistries.PARTICLE_TYPE.getKey(particle);
                     if (id == null) continue;
                     String cnName = cnMap.get(id.toString());
                     if (cnName == null) {
@@ -184,13 +183,13 @@ public class ShenParamHelper {
             }
             case SOUND_EVENT: {
                 java.util.Map<String, String> cnMap = buildChineseNameMap(SOUND_OPTIONS);
-                for (SoundEvent sound : Registries.SOUND_EVENT) {
-                    Identifier id = Registries.SOUND_EVENT.getId(sound);
+                for (SoundEvent sound : BuiltInRegistries.SOUND_EVENT) {
+                    ResourceLocation id = BuiltInRegistries.SOUND_EVENT.getKey(sound);
                     if (id == null) continue;
                     String cnName = cnMap.get(id.toString());
                     if (cnName == null) {
                         String subtitleKey = "subtitles." + id.getPath().replace('/', '.');
-                        cnName = I18n.translate(subtitleKey);
+                        cnName = I18n.get(subtitleKey);
                         if (cnName.equals(subtitleKey)) {
                             String path = id.getPath().replace('_', ' ').replace('/', ' ');
                             StringBuilder sb = new StringBuilder();
@@ -220,8 +219,8 @@ public class ShenParamHelper {
                 break;
             }
             case ATTRIBUTE: {
-                for (net.minecraft.entity.attribute.EntityAttribute attr : Registries.ATTRIBUTE) {
-                    Identifier id = Registries.ATTRIBUTE.getId(attr);
+                for (net.minecraft.world.entity.ai.attributes.Attribute attr : BuiltInRegistries.ATTRIBUTE) {
+                    ResourceLocation id = BuiltInRegistries.ATTRIBUTE.getKey(attr);
                     if (id == null) continue;
                     String cnName = tryTranslateAttribute(id, attr);
                     result.add(new String[]{cnName, id.toString()});
@@ -229,8 +228,8 @@ public class ShenParamHelper {
                 break;
             }
             case ENCHANTMENT: {
-                for (net.minecraft.enchantment.Enchantment ench : Registries.ENCHANTMENT) {
-                    Identifier id = Registries.ENCHANTMENT.getId(ench);
+                for (net.minecraft.world.item.enchantment.Enchantment ench : BuiltInRegistries.ENCHANTMENT) {
+                    ResourceLocation id = BuiltInRegistries.ENCHANTMENT.getKey(ench);
                     if (id == null) continue;
                     String cnName = tryTranslateEnchantment(id, ench);
                     result.add(new String[]{cnName, id.toString()});
@@ -258,6 +257,17 @@ public class ShenParamHelper {
         }
         unique.sort(Comparator.comparing(a -> a[0]));
         return unique.toArray(new String[0][0]);
+    }
+
+    /**
+     * 「移山填海」源方块选项：在全部方块注册表前插入"全部方块"选项
+     */
+    public static String[][] buildSourceBlockOptions() {
+        String[][] base = buildRegistryOptions(RegistryType.BLOCK);
+        String[][] result = new String[base.length + 1][];
+        result[0] = new String[]{"全部方块", "all"};
+        System.arraycopy(base, 0, result, 1, base.length);
+        return result;
     }
 
     private static final java.util.Map<String, String> BUILTIN_DIMENSION_NAMES = new HashMap<>();
@@ -316,7 +326,7 @@ public class ShenParamHelper {
         BUILTIN_DAMAGE_TYPE_NAMES.put("smfs:ghost", "灵异伤害");
     }
 
-    private static String formatIdToName(Identifier id) {
+    private static String formatIdToName(ResourceLocation id) {
         String path = id.getPath().replace('_', ' ').replace("/", " ");
         StringBuilder sb = new StringBuilder();
         boolean nextUpper = true;
@@ -393,17 +403,17 @@ public class ShenParamHelper {
         NBT_PATH_TRANSLATIONS.put("cultivation", "修为/境界");
     }
 
-    public static String tryTranslateDimension(Identifier dimId) {
+    public static String tryTranslateDimension(ResourceLocation dimId) {
         String key1 = "dimension." + dimId.getNamespace() + "." + dimId.getPath();
-        String t1 = I18n.translate(key1);
+        String t1 = I18n.get(key1);
         if (!t1.equals(key1)) return t1;
 
         String key2 = "world." + dimId.getNamespace() + "." + dimId.getPath();
-        String t2 = I18n.translate(key2);
+        String t2 = I18n.get(key2);
         if (!t2.equals(key2)) return t2;
 
         String key3 = "generator." + dimId.getPath();
-        String t3 = I18n.translate(key3);
+        String t3 = I18n.get(key3);
         if (!t3.equals(key3)) return t3;
 
         String builtin = BUILTIN_DIMENSION_NAMES.get(dimId.toString());
@@ -412,16 +422,16 @@ public class ShenParamHelper {
         return formatIdToName(dimId);
     }
 
-    public static String tryTranslateDamageType(Identifier dtId) {
+    public static String tryTranslateDamageType(ResourceLocation dtId) {
         String builtin = BUILTIN_DAMAGE_TYPE_NAMES.get(dtId.toString());
         if (builtin != null) return builtin;
 
         String deathKey = "death.attack." + dtId.getPath();
-        String t = I18n.translate(deathKey);
+        String t = I18n.get(deathKey);
         if (!t.equals(deathKey)) return t;
 
         String deathKeyNS = "death.attack." + dtId.getNamespace() + "." + dtId.getPath();
-        String tNS = I18n.translate(deathKeyNS);
+        String tNS = I18n.get(deathKeyNS);
         if (!tNS.equals(deathKeyNS)) return tNS;
 
         return formatIdToName(dtId);
@@ -433,19 +443,19 @@ public class ShenParamHelper {
         return "📋 " + nbtKey;
     }
 
-    public static String tryTranslateAttribute(Identifier attrId, net.minecraft.entity.attribute.EntityAttribute attr) {
+    public static String tryTranslateAttribute(ResourceLocation attrId, net.minecraft.world.entity.ai.attributes.Attribute attr) {
         String cnName = BUILTIN_ATTRIBUTE_NAMES.get(attrId.toString());
         if (cnName != null) return cnName;
         String i18nKey = "attribute.name." + attrId.getPath();
-        String t = I18n.translate(i18nKey);
+        String t = I18n.get(i18nKey);
         if (!t.equals(i18nKey)) return t;
         return formatIdToName(attrId);
     }
 
-    public static String tryTranslateEnchantment(Identifier enchId, net.minecraft.enchantment.Enchantment ench) {
+    public static String tryTranslateEnchantment(ResourceLocation enchId, net.minecraft.world.item.enchantment.Enchantment ench) {
         String cnName = BUILTIN_ENCHANTMENT_NAMES.get(enchId.toString());
         if (cnName != null) return cnName;
-        String i18nName = I18n.translate(ench.getTranslationKey());
+        String i18nName = I18n.get(ench.getDescriptionId());
         if (!i18nName.startsWith("enchantment.")) return i18nName;
         return formatIdToName(enchId);
     }
@@ -515,13 +525,13 @@ public class ShenParamHelper {
         BUILTIN_ENCHANTMENT_NAMES.put("minecraft:swift_sneak", "迅捷潜行");
     }
 
-    public static String[][] buildDimensionOptionsFromRegistry(DynamicRegistryManager registryManager) {
+    public static String[][] buildDimensionOptionsFromRegistry(RegistryAccess registryManager) {
         List<String[]> result = new ArrayList<>();
         try {
-            Registry<DimensionType> dimRegistry = registryManager.get(RegistryKeys.DIMENSION_TYPE);
+            Registry<DimensionType> dimRegistry = registryManager.registry(Registries.DIMENSION_TYPE).orElse(null);
             if (dimRegistry != null) {
-                for (Map.Entry<RegistryKey<DimensionType>, DimensionType> entry : dimRegistry.getEntrySet()) {
-                    Identifier dimId = entry.getKey().getValue();
+                for (Map.Entry<ResourceKey<DimensionType>, DimensionType> entry : dimRegistry.entrySet()) {
+                    ResourceLocation dimId = entry.getKey().location();
                     if (dimId == null) continue;
                     String cnName = tryTranslateDimension(dimId);
                     result.add(new String[]{cnName, dimId.toString()});
@@ -546,13 +556,13 @@ public class ShenParamHelper {
         return unique.toArray(new String[0][0]);
     }
 
-    public static String[][] buildDamageTypeOptionsFromRegistry(DynamicRegistryManager registryManager) {
+    public static String[][] buildDamageTypeOptionsFromRegistry(RegistryAccess registryManager) {
         List<String[]> result = new ArrayList<>();
         try {
-            Registry<net.minecraft.entity.damage.DamageType> dmgRegistry = registryManager.get(RegistryKeys.DAMAGE_TYPE);
+            Registry<net.minecraft.world.damagesource.DamageType> dmgRegistry = registryManager.registry(Registries.DAMAGE_TYPE).orElse(null);
             if (dmgRegistry != null) {
-                for (Map.Entry<RegistryKey<net.minecraft.entity.damage.DamageType>, net.minecraft.entity.damage.DamageType> entry : dmgRegistry.getEntrySet()) {
-                    Identifier dtId = entry.getKey().getValue();
+                for (Map.Entry<ResourceKey<net.minecraft.world.damagesource.DamageType>, net.minecraft.world.damagesource.DamageType> entry : dmgRegistry.entrySet()) {
+                    ResourceLocation dtId = entry.getKey().location();
                     if (dtId == null) continue;
                     String cnName = tryTranslateDamageType(dtId);
                     result.add(new String[]{cnName, dtId.toString()});
@@ -977,6 +987,9 @@ public class ShenParamHelper {
             case SET_INVISIBLE:
                 params.add(new ParamDef("value", "隐身", WidgetType.BOOLEAN, "true"));
                 break;
+            case SET_INVINCIBLE:
+                params.add(new ParamDef("value", "无敌", WidgetType.BOOLEAN, "true"));
+                break;
             case SATURATE_FOOD:
                 params.add(new ParamDef("food", "食物值", WidgetType.NUMBER, "20", 0, 20));
                 params.add(new ParamDef("saturation", "饱和值", WidgetType.NUMBER, "5.0", 0, 20));
@@ -1003,6 +1016,13 @@ public class ShenParamHelper {
             case FREEZE_ENTITY:
                 params.add(new ParamDef("ticks", "冻结时长(tick)", WidgetType.NUMBER, "100", 20, 100000, true));
                 break;
+            case CLEAVE_LAND:
+                params.add(new ParamDef("length", "向前长度(格)", WidgetType.NUMBER, "5", 1, 640, true));
+                params.add(new ParamDef("width", "宽度(格)", WidgetType.NUMBER, "5", 1, 640, true));
+                params.add(new ParamDef("depth", "深度(层)", WidgetType.NUMBER, "5", 1, 640, true));
+                params.add(new ParamDef("damage", "伤害值", WidgetType.NUMBER, "5", 0, 10000));
+                params.add(new ParamDef("damageType", "伤害类型", "minecraft:generic", RegistryType.DAMAGE_TYPE));
+                break;
             case MOD_ADAPTER_EFFECT:
                 params.add(new ParamDef("adapterEffectId", "适配器效果",
                     WidgetType.DROPDOWN, "",
@@ -1019,7 +1039,7 @@ public class ShenParamHelper {
                 break;
 
             case MASS_REPLACE_BLOCKS:
-                params.add(new ParamDef("sourceBlock", "源方块", "minecraft:stone", RegistryType.BLOCK));
+                params.add(new ParamDef("sourceBlock", "源方块", WidgetType.DROPDOWN, "minecraft:stone", buildSourceBlockOptions(), true));
                 params.add(new ParamDef("targetBlock", "目标方块", "minecraft:air", RegistryType.BLOCK));
                 params.add(new ParamDef("radiusX", "X轴半径", WidgetType.NUMBER, "5", 1, 64, true));
                 params.add(new ParamDef("radiusY", "Y轴半径", WidgetType.NUMBER, "5", 1, 64, true));
@@ -1193,15 +1213,15 @@ public class ShenParamHelper {
         }
 
         try {
-            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+            net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
             if (client != null) {
-                var server = client.getServer();
+                var server = client.getSingleplayerServer();
                 if (server != null) {
-                    var structureRegistry = server.getRegistryManager()
-                        .get(net.minecraft.registry.RegistryKeys.STRUCTURE);
+                    var structureRegistry = server.registryAccess()
+                        .registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
                     if (structureRegistry != null) {
-                        for (var entry : structureRegistry.getEntrySet()) {
-                            var id = entry.getKey().getValue();
+                        for (var entry : structureRegistry.entrySet()) {
+                            var id = entry.getKey().location();
                             if (id == null) continue;
                             String idStr = id.toString();
                             if (existingIds.contains(idStr)) continue;
@@ -1211,12 +1231,12 @@ public class ShenParamHelper {
                         }
                     }
                 }
-                if (client.world != null) {
-                    var structureRegistry = client.world.getRegistryManager()
-                        .get(net.minecraft.registry.RegistryKeys.STRUCTURE);
+                if (client.level != null) {
+                    var structureRegistry = client.level.registryAccess()
+                        .registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
                     if (structureRegistry != null) {
-                        for (var entry : structureRegistry.getEntrySet()) {
-                            var id = entry.getKey().getValue();
+                        for (var entry : structureRegistry.entrySet()) {
+                            var id = entry.getKey().location();
                             if (id == null) continue;
                             String idStr = id.toString();
                             if (existingIds.contains(idStr)) continue;
@@ -1233,7 +1253,7 @@ public class ShenParamHelper {
         return result.toArray(new String[0][]);
     }
 
-    private static String tryTranslateStructure(Identifier id) {
+    private static String tryTranslateStructure(ResourceLocation id) {
         String namespace = id.getNamespace();
         String path = id.getPath();
 
@@ -1252,7 +1272,7 @@ public class ShenParamHelper {
 
         for (String[] patterns : keyPatterns) {
             for (String key : patterns) {
-                String translated = I18n.translate(key);
+                String translated = I18n.get(key);
                 if (!translated.equals(key)) {
                     return translated;
                 }
@@ -1260,10 +1280,10 @@ public class ShenParamHelper {
         }
 
         try {
-            var mc = net.minecraft.client.MinecraftClient.getInstance();
-            if (mc != null && mc.world != null) {
-                var structure = mc.world.getRegistryManager()
-                    .get(net.minecraft.registry.RegistryKeys.STRUCTURE).get(id);
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            if (mc != null && mc.level != null) {
+                var structure = mc.level.registryAccess()
+                    .registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE).get(id);
                 if (structure != null) {
                     String name = structure.toString();
                     if (name != null && !name.isEmpty() && name.contains(":")) {
@@ -1271,7 +1291,7 @@ public class ShenParamHelper {
                         if (parts.length > 1) {
                             String objName = parts[1].replace('{', ' ').trim();
                             if (!objName.isEmpty()) {
-                                return formatIdToName(new Identifier(namespace, objName));
+                                return formatIdToName(new ResourceLocation(namespace, objName));
                             }
                         }
                     }
@@ -1285,20 +1305,20 @@ public class ShenParamHelper {
     public static String[][] buildStructureTemplateOptions() {
         List<String[]> result = new ArrayList<>();
         try {
-            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
+            net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
             if (client != null && client.getResourceManager() != null) {
-                java.util.Map<Identifier, net.minecraft.resource.Resource> resources =
-                    client.getResourceManager().findResources("structures",
+                java.util.Map<ResourceLocation, net.minecraft.server.packs.resources.Resource> resources =
+                    client.getResourceManager().listResources("structures",
                         path -> path.getPath().endsWith(".nbt"));
 
-                for (Identifier resourceId : resources.keySet()) {
+                for (ResourceLocation resourceId : resources.keySet()) {
                     String path = resourceId.getPath();
                     if (!path.startsWith("structures/")) continue;
                     String templatePath = path.substring("structures/".length());
                     if (templatePath.endsWith(".nbt")) {
                         templatePath = templatePath.substring(0, templatePath.length() - ".nbt".length());
                     }
-                    Identifier templateId = new Identifier(resourceId.getNamespace(), templatePath);
+                    ResourceLocation templateId = new ResourceLocation(resourceId.getNamespace(), templatePath);
                     String idStr = templateId.toString();
                     String cnName = tryTranslateTemplateName(templateId);
                     result.add(new String[]{cnName, idStr});
@@ -1315,16 +1335,16 @@ public class ShenParamHelper {
         return result.toArray(new String[0][]);
     }
 
-    private static String tryTranslateTemplateName(Identifier id) {
+    private static String tryTranslateTemplateName(ResourceLocation id) {
         String path = id.getPath();
         String namespace = id.getNamespace();
 
         String key1 = "structure." + namespace + "." + path.replace('/', '.');
-        String t1 = net.minecraft.client.resource.language.I18n.translate(key1);
+        String t1 = net.minecraft.client.resources.language.I18n.get(key1);
         if (!t1.equals(key1)) return t1;
 
         String key2 = "structure." + path.replace('/', '.');
-        String t2 = net.minecraft.client.resource.language.I18n.translate(key2);
+        String t2 = net.minecraft.client.resources.language.I18n.get(key2);
         if (!t2.equals(key2)) return t2;
 
         String[] parts = path.split("/");
@@ -1344,10 +1364,10 @@ public class ShenParamHelper {
     public static String[][] buildPlayerOptions() {
         List<String[]> result = new ArrayList<>();
         try {
-            net.minecraft.client.MinecraftClient client = net.minecraft.client.MinecraftClient.getInstance();
-            if (client != null && client.getNetworkHandler() != null) {
-                for (net.minecraft.client.network.PlayerListEntry entry :
-                    client.getNetworkHandler().getPlayerList()) {
+            net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+            if (client != null && client.getConnection() != null) {
+                for (net.minecraft.client.multiplayer.PlayerInfo entry :
+                    client.getConnection().getOnlinePlayers()) {
                     String name = entry.getProfile().getName();
                     result.add(new String[]{name, name});
                 }

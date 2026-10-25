@@ -1,6 +1,6 @@
 package bai.god.shen;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public enum ShenEventType {
     PLAYER_RIGHT_CLICK("玩家事件", "右键点击"),
@@ -58,7 +58,7 @@ public enum ShenEventType {
         return displayName;
     }
 
-    public Text toText() {
-        return Text.literal(category + " · " + displayName);
+    public Component toText() {
+        return Component.literal(category + " · " + displayName);
     }
 }

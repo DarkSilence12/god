@@ -1,15 +1,19 @@
 package bai.god.shen;
 
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 
 public class ShenRuleExecutor {
@@ -219,7 +223,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkExperienceCompare(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof ServerPlayerEntity player)) return false;
+        if (!(event.source instanceof ServerPlayer player)) return false;
         int value = Integer.parseInt(condition.value);
         int exp = player.totalExperience;
         switch (condition.operator) {
@@ -236,8 +240,8 @@ public class ShenRuleExecutor {
         if (event.source == null) return false;
         String key = condition.params.getOrDefault("nbtKey", "");
         String expectedValue = condition.value;
-        net.minecraft.nbt.NbtCompound nbt = new net.minecraft.nbt.NbtCompound();
-        event.source.writeNbt(nbt);
+        CompoundTag nbt = new CompoundTag();
+        event.source.saveWithoutId(nbt);
         if (nbt.contains(key)) {
             return nbt.get(key).toString().contains(expectedValue);
         }
@@ -245,26 +249,26 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkItemInHand(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         String itemId = condition.value;
-        net.minecraft.item.Item targetItem = net.minecraft.registry.Registries.ITEM.get(net.minecraft.util.Identifier.tryParse(itemId));
+        net.minecraft.world.item.Item targetItem = BuiltInRegistries.ITEM.get(ResourceLocation.tryParse(itemId));
         if (targetItem != null) {
-            return player.getMainHandStack().isOf(targetItem);
+            return player.getMainHandItem().is(targetItem);
         }
-        return player.getMainHandStack().getItem().toString().contains(itemId);
+        return player.getMainHandItem().getItem().toString().contains(itemId);
     }
 
     private static boolean checkItemInInventory(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         String itemId = condition.value;
-        net.minecraft.item.Item targetItem = net.minecraft.registry.Registries.ITEM.get(net.minecraft.util.Identifier.tryParse(itemId));
-        for (int i = 0; i < player.getInventory().size(); i++) {
+        net.minecraft.world.item.Item targetItem = BuiltInRegistries.ITEM.get(ResourceLocation.tryParse(itemId));
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             if (targetItem != null) {
-                if (player.getInventory().getStack(i).isOf(targetItem)) {
+                if (player.getInventory().getItem(i).is(targetItem)) {
                     return true;
                 }
             } else {
-                if (player.getInventory().getStack(i).getItem().toString().contains(itemId)) {
+                if (player.getInventory().getItem(i).getItem().toString().contains(itemId)) {
                     return true;
                 }
             }
@@ -275,22 +279,22 @@ public class ShenRuleExecutor {
     private static boolean checkHasEffect(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null) return false;
         String effectId = condition.value;
-        net.minecraft.entity.effect.StatusEffect targetEffect = net.minecraft.registry.Registries.STATUS_EFFECT.get(net.minecraft.util.Identifier.tryParse(effectId));
+        net.minecraft.world.effect.MobEffect targetEffect = BuiltInRegistries.MOB_EFFECT.get(ResourceLocation.tryParse(effectId));
         if (targetEffect != null) {
-            return event.source.hasStatusEffect(targetEffect);
+            return event.source.hasEffect(targetEffect);
         }
-        return event.source.getActiveStatusEffects().keySet().stream()
+        return event.source.getActiveEffectsMap().keySet().stream()
             .anyMatch(effect -> effect.toString().contains(effectId));
     }
 
     private static boolean checkInDimension(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null || event.world == null) return false;
         String dimensionId = condition.value;
-        net.minecraft.util.Identifier dimId = net.minecraft.util.Identifier.tryParse(dimensionId);
+        ResourceLocation dimId = ResourceLocation.tryParse(dimensionId);
         if (dimId != null) {
-            return event.world.getRegistryKey().getValue().equals(dimId);
+            return event.world.dimension().location().equals(dimId);
         }
-        return event.world.getRegistryKey().getValue().toString().contains(dimensionId);
+        return event.world.dimension().location().toString().contains(dimensionId);
     }
 
     private static boolean checkRandomChance(ShenRule.ShenCondition condition, ShenEvent event) {
@@ -305,7 +309,7 @@ public class ShenRuleExecutor {
 
     private static boolean checkTimeRange(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.world == null) return false;
-        long time = event.world.getTimeOfDay() % 24000;
+        long time = event.world.getDayTime() % 24000;
         long target = Long.parseLong(condition.value);
         String op = condition.operator != null ? condition.operator : "==";
         switch (op) {
@@ -328,14 +332,15 @@ public class ShenRuleExecutor {
 
     private static boolean checkBiome(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null) return false;
-        Identifier biomeId = Identifier.tryParse(condition.value);
+        ResourceLocation biomeId = ResourceLocation.tryParse(condition.value);
         if (biomeId == null) return false;
-        return event.source.getWorld().getBiome(event.source.getBlockPos()).matchesId(biomeId);
+        return event.source.level().getBiome(event.source.blockPosition())
+            .unwrapKey().map(k -> k.location().equals(biomeId)).orElse(false);
     }
 
     private static boolean checkLightLevel(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null) return false;
-        int level = event.source.getWorld().getLightLevel(event.source.getBlockPos());
+        int level = event.source.level().getMaxLocalRawBrightness(event.source.blockPosition());
         int target = Integer.parseInt(condition.value);
         String op = condition.operator != null ? condition.operator : ">=";
         switch (op) {
@@ -347,20 +352,20 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkIsSneaking(ShenRule.ShenCondition condition, ShenEvent event) {
-        return event.source instanceof PlayerEntity && ((PlayerEntity) event.source).isSneaking();
+        return event.source instanceof Player && ((Player) event.source).isShiftKeyDown();
     }
 
     private static boolean checkIsSprinting(ShenRule.ShenCondition condition, ShenEvent event) {
-        return event.source instanceof PlayerEntity && ((PlayerEntity) event.source).isSprinting();
+        return event.source instanceof Player && ((Player) event.source).isSprinting();
     }
 
     private static boolean checkItemHasEnchantment(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         String enchantId = condition.value;
         if (enchantId == null || enchantId.isEmpty()) return false;
-        net.minecraft.nbt.NbtList enchantments = player.getMainHandStack().getEnchantments();
+        ListTag enchantments = player.getMainHandItem().getEnchantmentTags();
         for (int i = 0; i < enchantments.size(); i++) {
-            net.minecraft.nbt.NbtCompound compound = enchantments.getCompound(i);
+            CompoundTag compound = enchantments.getCompound(i);
             String id = compound.getString("id");
             if (enchantId.equals(id)) return true;
         }
@@ -372,7 +377,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkIsInWater(ShenRule.ShenCondition condition, ShenEvent event) {
-        return event.source != null && event.source.isTouchingWater();
+        return event.source != null && event.source.isInWater();
     }
 
     private static boolean checkIsInLava(ShenRule.ShenCondition condition, ShenEvent event) {
@@ -402,8 +407,8 @@ public class ShenRuleExecutor {
         if ("global".equals(scope)) {
             varValue = store.getGlobal(varKey);
         } else {
-            if (event.source instanceof ServerPlayerEntity player) {
-                varValue = store.getPlayer(player.getUuid(), varKey);
+            if (event.source instanceof ServerPlayer player) {
+                varValue = store.getPlayer(player.getUUID(), varKey);
             } else {
                 return false;
             }
@@ -421,15 +426,15 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkGamemode(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof ServerPlayerEntity player)) return false;
+        if (!(event.source instanceof ServerPlayer player)) return false;
         String mode = condition.value;
-        return player.interactionManager.getGameMode().getName().equalsIgnoreCase(mode);
+        return player.gameMode.getGameModeForPlayer().getName().equalsIgnoreCase(mode);
     }
 
     private static boolean checkFoodLevel(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         int value = Integer.parseInt(condition.value);
-        int food = player.getHungerManager().getFoodLevel();
+        int food = player.getFoodData().getFoodLevel();
         switch (condition.operator) {
             case ">=": return food >= value;
             case "<=": return food <= value;
@@ -441,7 +446,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkPlayerLevel(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         int value = Integer.parseInt(condition.value);
         int level = player.experienceLevel;
         switch (condition.operator) {
@@ -457,8 +462,8 @@ public class ShenRuleExecutor {
     private static boolean checkEntityType(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null) return false;
         String typeId = condition.value;
-        return event.source.getType().getUntranslatedName().contains(typeId)
-            || net.minecraft.registry.Registries.ENTITY_TYPE.getId(event.source.getType()).toString().contains(typeId);
+        return event.source.getType().getDescriptionId().contains(typeId)
+            || BuiltInRegistries.ENTITY_TYPE.getKey(event.source.getType()).toString().contains(typeId);
     }
 
     private static boolean checkEntityExists(ShenRule.ShenCondition condition, ShenEvent event) {
@@ -467,7 +472,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkElytraFlying(ShenRule.ShenCondition condition, ShenEvent event) {
-        return event.source instanceof net.minecraft.entity.player.PlayerEntity p
+        return event.source instanceof Player p
             && p.isFallFlying();
     }
 
@@ -481,33 +486,33 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkRiding(ShenRule.ShenCondition condition, ShenEvent event) {
-        return event.source != null && event.source.hasVehicle();
+        return event.source != null && event.source.isPassenger();
     }
 
     private static boolean checkWearingArmor(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity p)) return false;
+        if (!(event.source instanceof Player p)) return false;
         String slot = condition.value;
         if ("any".equals(slot)) {
-            for (net.minecraft.item.ItemStack armor : p.getArmorItems()) {
+            for (ItemStack armor : p.getArmorSlots()) {
                 if (!armor.isEmpty()) return true;
             }
             return false;
         }
-        net.minecraft.item.ItemStack stack = switch (slot) {
+        ItemStack stack = switch (slot) {
             case "head" -> p.getInventory().armor.get(3);
             case "chest" -> p.getInventory().armor.get(2);
             case "legs" -> p.getInventory().armor.get(1);
             case "feet" -> p.getInventory().armor.get(0);
-            default -> net.minecraft.item.ItemStack.EMPTY;
+            default -> ItemStack.EMPTY;
         };
         return !stack.isEmpty();
     }
 
     private static boolean checkWearingItem(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity p)) return false;
+        if (!(event.source instanceof Player p)) return false;
         String itemId = condition.value;
-        for (net.minecraft.item.ItemStack armor : p.getArmorItems()) {
-            if (!armor.isEmpty() && net.minecraft.registry.Registries.ITEM.getId(armor.getItem()).toString().equals(itemId)) {
+        for (ItemStack armor : p.getArmorSlots()) {
+            if (!armor.isEmpty() && BuiltInRegistries.ITEM.getKey(armor.getItem()).toString().equals(itemId)) {
                 return true;
             }
         }
@@ -517,31 +522,31 @@ public class ShenRuleExecutor {
     private static boolean checkBlockBelow(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.world == null || event.pos == null) return false;
         String blockId = condition.value;
-        net.minecraft.util.math.BlockPos below = event.pos.down();
-        net.minecraft.block.Block block = event.world.getBlockState(below).getBlock();
-        return net.minecraft.registry.Registries.BLOCK.getId(block).toString().equals(blockId);
+        BlockPos below = event.pos.below();
+        net.minecraft.world.level.block.Block block = event.world.getBlockState(below).getBlock();
+        return BuiltInRegistries.BLOCK.getKey(block).toString().equals(blockId);
     }
 
     private static boolean checkBlockAbove(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.world == null || event.pos == null) return false;
         String blockId = condition.value;
-        net.minecraft.util.math.BlockPos above = event.pos.up();
-        net.minecraft.block.Block block = event.world.getBlockState(above).getBlock();
-        return net.minecraft.registry.Registries.BLOCK.getId(block).toString().equals(blockId);
+        BlockPos above = event.pos.above();
+        net.minecraft.world.level.block.Block block = event.world.getBlockState(above).getBlock();
+        return BuiltInRegistries.BLOCK.getKey(block).toString().equals(blockId);
     }
 
     private static boolean checkPermissionLevel(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.server.network.ServerPlayerEntity p)) return false;
+        if (!(event.source instanceof ServerPlayer p)) return false;
         int required = Integer.parseInt(condition.value);
-        return p.server.getPermissionLevel(p.getGameProfile()) >= required;
+        return p.server.getProfilePermissions(p.getGameProfile()) >= required;
     }
 
     private static boolean checkAttributeValue(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null) return false;
         try {
             String attrId = condition.value;
-            net.minecraft.entity.attribute.EntityAttribute attr = net.minecraft.registry.Registries.ATTRIBUTE.get(
-                net.minecraft.util.Identifier.tryParse(attrId));
+            net.minecraft.world.entity.ai.attributes.Attribute attr = BuiltInRegistries.ATTRIBUTE.get(
+                ResourceLocation.tryParse(attrId));
             if (attr == null) return false;
             double actualValue = event.source.getAttributeValue(attr);
             double targetValue = Double.parseDouble(condition.params.getOrDefault("compareValue", "0"));
@@ -559,23 +564,23 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkBlockInHand(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity p)) return false;
+        if (!(event.source instanceof Player p)) return false;
         String blockId = condition.value;
-        net.minecraft.item.ItemStack main = p.getMainHandStack();
-        net.minecraft.block.Block block = net.minecraft.block.Block.getBlockFromItem(main.getItem());
-        if (block != null && !block.getDefaultState().isAir()) {
-            return net.minecraft.registry.Registries.BLOCK.getId(block).toString().equals(blockId);
+        ItemStack main = p.getMainHandItem();
+        net.minecraft.world.level.block.Block block = net.minecraft.world.level.block.Block.byItem(main.getItem());
+        if (block != null && !block.defaultBlockState().isAir()) {
+            return BuiltInRegistries.BLOCK.getKey(block).toString().equals(blockId);
         }
         return false;
     }
 
     private static boolean checkItemName(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity p)) return false;
+        if (!(event.source instanceof Player p)) return false;
         String keyword = condition.params.getOrDefault("nameKeyword", condition.value);
         if (keyword.isEmpty()) return false;
-        net.minecraft.item.ItemStack stack = p.getMainHandStack();
+        ItemStack stack = p.getMainHandItem();
         if (stack.isEmpty()) return false;
-        String itemName = stack.getName().getString();
+        String itemName = stack.getHoverName().getString();
         boolean matchMode = "exact".equals(condition.params.getOrDefault("nameMatchMode", "contains"));
         return matchMode ? itemName.equals(keyword) : itemName.contains(keyword);
     }
@@ -584,12 +589,12 @@ public class ShenRuleExecutor {
         String playerName = condition.params.getOrDefault("playerName", "");
         String playerUuid = condition.params.getOrDefault("playerUuid", "");
         if (playerName.isEmpty() && playerUuid.isEmpty()) return false;
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity source)) return false;
+        if (!(event.source instanceof Player source)) return false;
         net.minecraft.server.MinecraftServer server = source.getServer();
         if (server == null) return false;
-        for (net.minecraft.server.network.ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
             if (!playerName.isEmpty() && online.getName().getString().equalsIgnoreCase(playerName)) return true;
-            if (!playerUuid.isEmpty() && online.getUuid().toString().equalsIgnoreCase(playerUuid)) return true;
+            if (!playerUuid.isEmpty() && online.getUUID().toString().equalsIgnoreCase(playerUuid)) return true;
         }
         return false;
     }
@@ -602,24 +607,24 @@ public class ShenRuleExecutor {
 
     private static boolean checkDifficulty(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.world == null) return false;
-        return event.world.getDifficulty().getName().equals(condition.value);
+        return event.world.getDifficulty().getKey().equals(condition.value);
     }
 
     private static boolean checkInStructure(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null || event.world == null) return false;
         String structureId = condition.value;
         if (structureId == null || structureId.isEmpty()) return false;
-        BlockPos pos = event.source.getBlockPos();
-        net.minecraft.util.Identifier expectedId = net.minecraft.util.Identifier.tryParse(structureId);
+        BlockPos pos = event.source.blockPosition();
+        ResourceLocation expectedId = ResourceLocation.tryParse(structureId);
 
-        if (event.world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
-            net.minecraft.util.math.ChunkPos chunkPos = new net.minecraft.util.math.ChunkPos(pos);
-            net.minecraft.world.chunk.Chunk chunk = serverWorld.getChunk(chunkPos.x, chunkPos.z);
-            var starts = chunk.getStructureStarts();
+        if (event.world instanceof ServerLevel serverWorld) {
+            net.minecraft.world.level.ChunkPos chunkPos = new net.minecraft.world.level.ChunkPos(pos);
+            net.minecraft.world.level.chunk.ChunkAccess chunk = serverWorld.getChunk(chunkPos.x, chunkPos.z);
+            var starts = chunk.getAllStarts();
 
-            for (net.minecraft.world.gen.structure.Structure s : starts.keySet()) {
-                net.minecraft.util.Identifier id = serverWorld.getRegistryManager()
-                    .get(net.minecraft.registry.RegistryKeys.STRUCTURE).getId(s);
+            for (net.minecraft.world.level.levelgen.structure.Structure s : starts.keySet()) {
+                ResourceLocation id = serverWorld.registryAccess()
+                    .registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE).getKey(s);
                 if (expectedId != null && id != null && id.equals(expectedId)) {
                     return true;
                 }
@@ -634,35 +639,35 @@ public class ShenRuleExecutor {
 
     private static boolean checkStructureDistance(ShenRule.ShenCondition condition, ShenEvent event) {
         if (event.source == null || event.world == null) return false;
-        if (!(event.world instanceof net.minecraft.server.world.ServerWorld serverWorld)) return false;
+        if (!(event.world instanceof ServerLevel serverWorld)) return false;
         String structureId = condition.value;
         double maxDistance = Double.parseDouble(condition.params.getOrDefault("maxDistance", "100"));
-        BlockPos pos = event.source.getBlockPos();
-        net.minecraft.util.Identifier expectedId = net.minecraft.util.Identifier.tryParse(structureId);
+        BlockPos pos = event.source.blockPosition();
+        ResourceLocation expectedId = ResourceLocation.tryParse(structureId);
 
         int range = (int) Math.ceil(maxDistance);
         double closestDistance = Double.MAX_VALUE;
 
         for (int dx = -range; dx <= range; dx++) {
             for (int dz = -range; dz <= range; dz++) {
-                BlockPos chunkPos = pos.add(dx * 16, 0, dz * 16);
-                net.minecraft.world.chunk.Chunk chunk = serverWorld.getChunk(chunkPos);
-                var starts = chunk.getStructureStarts();
+                BlockPos chunkPos = pos.offset(dx * 16, 0, dz * 16);
+                net.minecraft.world.level.chunk.ChunkAccess chunk = serverWorld.getChunk(chunkPos);
+                var starts = chunk.getAllStarts();
                 for (var entry : starts.entrySet()) {
-                    net.minecraft.world.gen.structure.Structure structure = entry.getKey();
-                    net.minecraft.util.Identifier id = serverWorld.getRegistryManager()
-                        .get(net.minecraft.registry.RegistryKeys.STRUCTURE).getId(structure);
+                    net.minecraft.world.level.levelgen.structure.Structure structure = entry.getKey();
+                    ResourceLocation id = serverWorld.registryAccess()
+                        .registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE).getKey(structure);
                     if (expectedId != null && id != null && id.equals(expectedId)) {
                         var start = entry.getValue();
                         double dist = Math.sqrt(start.getBoundingBox().getCenter()
-                            .getSquaredDistance(pos));
+                            .distSqr(pos));
                         if (dist < closestDistance) {
                             closestDistance = dist;
                         }
                     } else if (id != null && id.toString().contains(structureId)) {
                         var start = entry.getValue();
                         double dist = Math.sqrt(start.getBoundingBox().getCenter()
-                            .getSquaredDistance(pos));
+                            .distSqr(pos));
                         if (dist < closestDistance) {
                             closestDistance = dist;
                         }
@@ -684,7 +689,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsHasGhostType(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         String ghostTypeId = condition.value;
         if (ghostTypeId.isEmpty()) return false;
@@ -692,7 +697,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsSlotOccupied(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int slotIndex = Integer.parseInt(condition.params.getOrDefault("slotIndex", "0"));
         boolean expectOccupied = "true".equalsIgnoreCase(condition.value);
@@ -700,14 +705,14 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsHasMainGhost(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         boolean expected = "true".equalsIgnoreCase(condition.value);
         return bai.god.shen.compat.smfs.SmfsIntegration.hasMainGhost(player) == expected;
     }
 
     private static boolean checkSmfsSpiritAttrCompare(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         String attrKey = condition.params.getOrDefault("spiritAttr", "spiritResistance");
         double attrValue;
@@ -748,7 +753,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsGhostPossession(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int occupied = bai.god.shen.compat.smfs.SmfsIntegration.countOccupiedSlots(player);
         int total = bai.god.shen.compat.smfs.SmfsIntegration.getTotalSlotCount();
@@ -766,7 +771,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsMainGhostType(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.hasMainGhost(player)) return false;
         int mainSlot = bai.god.shen.compat.smfs.SmfsIntegration.getMainGhostSlot(player);
@@ -780,21 +785,21 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsHasGhostDomain(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         boolean expected = "true".equalsIgnoreCase(condition.value);
         return bai.god.shen.compat.smfs.SmfsIntegration.isGhostDomainActive(player) == expected;
     }
 
     private static boolean checkSmfsGhostDomainType(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int expectedColor = Integer.parseInt(condition.value);
         return bai.god.shen.compat.smfs.SmfsIntegration.getGhostDomainColor(player) == expectedColor;
     }
 
     private static boolean checkSmfsGhostDomainLevel(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int level = bai.god.shen.compat.smfs.SmfsIntegration.getGhostDomainLevel(player);
         int compareLevel = Integer.parseInt(condition.params.getOrDefault("compareValue", "1"));
@@ -811,14 +816,14 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsHasGhostEye(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         boolean expected = "true".equalsIgnoreCase(condition.value);
         return bai.god.shen.compat.smfs.SmfsIntegration.isGhostEyeActive(player) == expected;
     }
 
     private static boolean checkSmfsGhostEyeLevel(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int level = bai.god.shen.compat.smfs.SmfsIntegration.getGhostEyeLevel(player);
         int compareLevel = Integer.parseInt(condition.params.getOrDefault("compareValue", "1"));
@@ -835,7 +840,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsSlotLevelCompare(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int slotIndex = Integer.parseInt(condition.params.getOrDefault("slotIndex", "0"));
         int level = bai.god.shen.compat.smfs.SmfsIntegration.getSlotLevel(player, slotIndex);
@@ -852,7 +857,7 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkSmfsSlotCountCompare(ShenRule.ShenCondition condition, ShenEvent event) {
-        if (!(event.source instanceof net.minecraft.entity.player.PlayerEntity player)) return false;
+        if (!(event.source instanceof Player player)) return false;
         if (!bai.god.shen.compat.smfs.SmfsIntegration.isSmfsLoaded()) return false;
         int occupied = bai.god.shen.compat.smfs.SmfsIntegration.countOccupiedSlots(player);
         int compareCount = Integer.parseInt(condition.params.getOrDefault("compareValue", "1"));
@@ -869,6 +874,6 @@ public class ShenRuleExecutor {
     }
 
     private static boolean checkIsAttacking(ShenRule.ShenCondition condition, ShenEvent event) {
-        return event.source != null && event.source.getAttacking() != null;
+        return event.source != null && event.source.getLastHurtMob() != null;
     }
 }

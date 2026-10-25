@@ -1,17 +1,18 @@
 package bai.god.shen.ui;
 
-import net.minecraft.block.Block;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.resource.language.I18n;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 参数配置独立页面
@@ -31,7 +32,7 @@ public class ShenParamConfigScreen extends Screen {
                                   List<ShenParamHelper.ParamDef> paramDefs,
                                   Map<String, String> params,
                                   Runnable onSave) {
-        super(Text.literal("配置 " + title));
+        super(Component.literal("配置 " + title));
         this.parent = parent;
         this.title = title;
         this.paramDefs = paramDefs;
@@ -40,7 +41,7 @@ public class ShenParamConfigScreen extends Screen {
     }
 
     private void rebuild() {
-        this.clearChildren();
+        this.clearWidgets();
         this.scrollOffset = 0;
         this.maxScroll = 0;
         this.init();
@@ -56,17 +57,17 @@ public class ShenParamConfigScreen extends Screen {
         int marginX = 10;
         int contentWidth = sw - marginX * 2;
 
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§c← 返回"),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§c← 返回"),
             button -> {
-                if (this.client != null) this.client.setScreen(parent);
+                if (this.minecraft != null) this.minecraft.setScreen(parent);
             }
-        ).dimensions(marginX, 8, 60, 20).build());
+        ).bounds(marginX, 8, 60, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§6§l配置参数: " + title),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§6§l配置参数: " + title),
             b -> {}
-        ).dimensions(80, 8, Math.min(300, sw - 90), 20).build());
+        ).bounds(80, 8, Math.min(300, sw - 90), 20).build());
 
         int widgetStartY = 36;
         int widgetSpacing = 24;
@@ -91,18 +92,18 @@ public class ShenParamConfigScreen extends Screen {
 
         int bottomY = sh - 28;
         int btnW = Math.min(120, (sw - 30) / 2);
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§a✓ 完成"),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§a✓ 完成"),
             button -> {
                 onSave.run();
-                if (this.client != null) this.client.setScreen(parent);
+                if (this.minecraft != null) this.minecraft.setScreen(parent);
             }
-        ).dimensions(sw / 2 - btnW / 2, bottomY, btnW, 20).build());
+        ).bounds(sw / 2 - btnW / 2, bottomY, btnW, 20).build());
     }
 
     private void renderParamWidget(ShenParamHelper.ParamDef def, int x, int y, int contentWidth) {
         String currentValue = params.getOrDefault(def.key, def.defaultValue);
-        int labelWidth = Math.min(this.textRenderer.getWidth(def.label + ": ") + 5, contentWidth / 4);
+        int labelWidth = Math.min(this.font.width(def.label + ": ") + 5, contentWidth / 4);
 
         switch (def.widgetType) {
             case DROPDOWN: {
@@ -114,55 +115,55 @@ public class ShenParamConfigScreen extends Screen {
                 String displayName = getOptionDisplayName(def.options, currentValue);
                 boolean isCustomValue = def.allowCustom && !isValueInOptions(def.options, currentValue);
 
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§7" + def.label + ":"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal("§7" + def.label + ":"),
                     b -> {}
-                ).dimensions(x, y, labelWidth, 20).build());
+                ).bounds(x, y, labelWidth, 20).build());
 
                 if (def.allowCustom && dropdownCustomKey.equals(def.key)) {
                     int btnWidth = Math.min(160, contentWidth - labelWidth - 25);
                     if (btnWidth < 40) btnWidth = 40;
-                    TextFieldWidget customInput = new TextFieldWidget(this.textRenderer,
-                        x + labelWidth, y, btnWidth, 20, Text.literal("输入ID..."));
+                    EditBox customInput = new EditBox(this.font,
+                        x + labelWidth, y, btnWidth, 20, Component.literal("输入ID..."));
                     customInput.setMaxLength(128);
-                    customInput.setText(currentValue);
-                    customInput.setChangedListener(text -> params.put(def.key, text));
+                    customInput.setValue(currentValue);
+                    customInput.setResponder(text -> params.put(def.key, text));
                     customInput.setFocused(true);
-                    this.addDrawableChild(customInput);
+                    this.addRenderableWidget(customInput);
 
-                    this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("§a✓"),
+                    this.addRenderableWidget(Button.builder(
+                        Component.literal("§a✓"),
                         button -> {
                             dropdownCustomKey = "";
                             rebuild();
                         }
-                    ).dimensions(x + labelWidth + btnWidth + 2, y, 20, 20).build());
+                    ).bounds(x + labelWidth + btnWidth + 2, y, 20, 20).build());
                     break;
                 }
 
                 int btnWidth = Math.min(160, contentWidth - labelWidth - 25);
                 if (btnWidth < 40) btnWidth = 40;
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal((isCustomValue ? "§d" : "§f") + displayName + " §7[选择]"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal((isCustomValue ? "§d" : "§f") + displayName + " §7[选择]"),
                     button -> {
-                        if (this.client != null) {
-                            this.client.setScreen(new RegistrySelectionScreen(
+                        if (this.minecraft != null) {
+                            this.minecraft.setScreen(new RegistrySelectionScreen(
                                 this, def, currentValue, selectedValue -> {
                                     params.put(def.key, selectedValue);
                                 }
                             ));
                         }
                     }
-                ).dimensions(x + labelWidth, y, btnWidth, 20).build());
+                ).bounds(x + labelWidth, y, btnWidth, 20).build());
 
                 if (def.allowCustom && btnWidth > 60) {
-                    this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal("✏️"),
+                    this.addRenderableWidget(Button.builder(
+                        Component.literal("✏️"),
                         button -> {
                             dropdownCustomKey = def.key;
                             rebuild();
                         }
-                    ).dimensions(x + labelWidth + btnWidth + 2, y, 20, 20).build());
+                    ).bounds(x + labelWidth + btnWidth + 2, y, 20, 20).build());
                 }
                 break;
             }
@@ -171,10 +172,10 @@ public class ShenParamConfigScreen extends Screen {
                 int btnWidth = Math.min(80, Math.max(36, (contentWidth - labelWidth - 30) / def.options.length));
                 if (btnWidth < 36) btnWidth = 36;
 
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§7" + def.label + ":"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal("§7" + def.label + ":"),
                     b -> {}
-                ).dimensions(x, y, labelWidth, 20).build());
+                ).bounds(x, y, labelWidth, 20).build());
 
                 int btnX = x + labelWidth;
                 int sw = this.width;
@@ -182,13 +183,13 @@ public class ShenParamConfigScreen extends Screen {
                     boolean selected = option[1].equals(currentValue);
                     String optionLabel = (sw < 300 && option[0].length() > 3)
                         ? option[0].substring(0, Math.min(2, btnWidth / 10)) : option[0];
-                    this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal((selected ? "§a" : "§7") + optionLabel),
+                    this.addRenderableWidget(Button.builder(
+                        Component.literal((selected ? "§a" : "§7") + optionLabel),
                         button -> {
                             params.put(def.key, option[1]);
                             rebuild();
                         }
-                    ).dimensions(btnX, y, btnWidth, 20).build());
+                    ).bounds(btnX, y, btnWidth, 20).build());
                     btnX += btnWidth + 3;
                     if (btnX + btnWidth > this.width - 5) break;
                 }
@@ -198,22 +199,22 @@ public class ShenParamConfigScreen extends Screen {
             case BOOLEAN: {
                 boolean value = "true".equalsIgnoreCase(currentValue);
                 int boolW = Math.min(200, contentWidth);
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§7" + def.label + ": " + (value ? "§a✅ 是" : "§c❌ 否")),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal("§7" + def.label + ": " + (value ? "§a✅ 是" : "§c❌ 否")),
                     button -> {
                         boolean newVal = !"true".equalsIgnoreCase(params.getOrDefault(def.key, def.defaultValue));
                         params.put(def.key, newVal ? "true" : "false");
                         rebuild();
                     }
-                ).dimensions(x, y, boolW, 20).build());
+                ).bounds(x, y, boolW, 20).build());
                 break;
             }
 
             case NUMBER: {
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§7" + def.label + ":"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal("§7" + def.label + ":"),
                     b -> {}
-                ).dimensions(x, y, labelWidth, 20).build());
+                ).bounds(x, y, labelWidth, 20).build());
 
                 int inputX = x + labelWidth;
                 int sw = this.width;
@@ -232,8 +233,8 @@ public class ShenParamConfigScreen extends Screen {
                         if (opModes[i][0].equals(currentOp)) { curIdx = i; break; }
                     }
                     int opW = 18;
-                    this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal(opModes[curIdx][1]),
+                    this.addRenderableWidget(Button.builder(
+                        Component.literal(opModes[curIdx][1]),
                         button -> {
                             String cur = params.getOrDefault(def.key + "_op", "set");
                             int nextIdx = 0;
@@ -243,66 +244,66 @@ public class ShenParamConfigScreen extends Screen {
                             params.put(def.key + "_op", opModes[nextIdx][0]);
                             rebuild();
                         }
-                    ).dimensions(inputX, y, opW, 20).build());
+                    ).bounds(inputX, y, opW, 20).build());
                     inputX += opW + 2;
                 }
 
                 int remaining = contentWidth - (inputX - x) - 55;
                 int inputWidth = Math.min(80, Math.max(30, remaining / 2));
-                TextFieldWidget numInput = new TextFieldWidget(this.textRenderer, inputX, y, inputWidth, 20, Text.literal(def.label));
+                EditBox numInput = new EditBox(this.font, inputX, y, inputWidth, 20, Component.literal(def.label));
                 numInput.setMaxLength(32);
-                numInput.setText(currentValue);
-                numInput.setChangedListener(text -> params.put(def.key, text));
-                this.addDrawableChild(numInput);
+                numInput.setValue(currentValue);
+                numInput.setResponder(text -> params.put(def.key, text));
+                this.addRenderableWidget(numInput);
 
                 int stepBtnX = inputX + inputWidth + 2;
-                this.addDrawableChild(ButtonWidget.builder(Text.literal("-1"), button -> {
+                this.addRenderableWidget(Button.builder(Component.literal("-1"), button -> {
                     try {
                         int val = Integer.parseInt(params.getOrDefault(def.key, def.defaultValue));
                         val = Math.max(def.min, val - 1);
                         params.put(def.key, String.valueOf(val));
                         rebuild();
                     } catch (NumberFormatException ignored) {}
-                }).dimensions(stepBtnX, y, Math.min(22, (sw - stepBtnX) / 3), 20).build());
+                }).bounds(stepBtnX, y, Math.min(22, (sw - stepBtnX) / 3), 20).build());
 
-                this.addDrawableChild(ButtonWidget.builder(Text.literal("+1"), button -> {
+                this.addRenderableWidget(Button.builder(Component.literal("+1"), button -> {
                     try {
                         int val = Integer.parseInt(params.getOrDefault(def.key, def.defaultValue));
                         val = Math.min(def.max, val + 1);
                         params.put(def.key, String.valueOf(val));
                         rebuild();
                     } catch (NumberFormatException ignored) {}
-                }).dimensions(stepBtnX + Math.min(24, (sw - stepBtnX - 24) / 2), y, Math.min(24, (sw - stepBtnX) / 3), 20).build());
+                }).bounds(stepBtnX + Math.min(24, (sw - stepBtnX - 24) / 2), y, Math.min(24, (sw - stepBtnX) / 3), 20).build());
 
                 if ((def.min != 0 || def.max != 0) && sw > 350) {
                     String rangeText = "§7[" + def.min + "~" + def.max + "]";
-                    this.addDrawableChild(ButtonWidget.builder(
-                        Text.literal(rangeText),
+                    this.addRenderableWidget(Button.builder(
+                        Component.literal(rangeText),
                         b -> {}
-                    ).dimensions(stepBtnX + 50, y, this.textRenderer.getWidth(rangeText) + 6, 20).build());
+                    ).bounds(stepBtnX + 50, y, this.font.width(rangeText) + 6, 20).build());
                 }
                 break;
             }
 
             case TEXT: {
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§7" + def.label + ":"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal("§7" + def.label + ":"),
                     b -> {}
-                ).dimensions(x, y, labelWidth, 20).build());
+                ).bounds(x, y, labelWidth, 20).build());
 
                 int inputWidth = Math.min(300, Math.max(40, contentWidth - labelWidth - 20));
-                TextFieldWidget textInput = new TextFieldWidget(this.textRenderer, x + labelWidth, y, inputWidth, 20, Text.literal(def.label));
+                EditBox textInput = new EditBox(this.font, x + labelWidth, y, inputWidth, 20, Component.literal(def.label));
                 textInput.setMaxLength(512);
-                textInput.setText(currentValue);
-                textInput.setChangedListener(text -> params.put(def.key, text));
-                this.addDrawableChild(textInput);
+                textInput.setValue(currentValue);
+                textInput.setResponder(text -> params.put(def.key, text));
+                this.addRenderableWidget(textInput);
                 break;
             }
             case COLOR: {
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("§7" + def.label + ":"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal("§7" + def.label + ":"),
                     b -> {}
-                ).dimensions(x, y, labelWidth, 20).build());
+                ).bounds(x, y, labelWidth, 20).build());
 
                 int r = 255, g = 0, b = 0;
                 try {
@@ -319,27 +320,27 @@ public class ShenParamConfigScreen extends Screen {
 
                 int btnX = x + labelWidth;
                 int btnWidth = contentWidth - labelWidth - 48;
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal(displayText),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal(displayText),
                     button -> {
-                        if (this.client != null) {
-                            this.client.setScreen(new ColorPickerScreen(
+                        if (this.minecraft != null) {
+                            this.minecraft.setScreen(new ColorPickerScreen(
                                 this, def, currentValue, selected -> {
                                     params.put(def.key, selected);
                                 }
                             ));
                         }
                     }
-                ).dimensions(btnX, y, btnWidth, 20).build());
+                ).bounds(btnX, y, btnWidth, 20).build());
 
                 boolean isDefault = def.defaultValue.equals(currentValue);
-                this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal(isDefault ? "§8↺" : "§c↺"),
+                this.addRenderableWidget(Button.builder(
+                    Component.literal(isDefault ? "§8↺" : "§c↺"),
                     button -> {
                         params.put(def.key, def.defaultValue);
                         rebuild();
                     }
-                ).dimensions(btnX + btnWidth + 2, y, 24, 20).build());
+                ).bounds(btnX + btnWidth + 2, y, 24, 20).build());
                 break;
             }
         }
@@ -349,84 +350,84 @@ public class ShenParamConfigScreen extends Screen {
         int btnX = x + 50;
         int btnWidth = Math.min(200, Math.max(40, contentWidth - 50 - 10));
 
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§7" + def.label + ":"), b -> {}
-        ).dimensions(x, y, 48, 20).build());
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§7" + def.label + ":"), b -> {}
+        ).bounds(x, y, 48, 20).build());
 
         if (dropdownCustomKey.equals(def.key)) {
-            TextFieldWidget customInput = new TextFieldWidget(this.textRenderer,
-                btnX, y, btnWidth, 20, Text.literal("输入ID..."));
+            EditBox customInput = new EditBox(this.font,
+                btnX, y, btnWidth, 20, Component.literal("输入ID..."));
             customInput.setMaxLength(128);
-            customInput.setText(currentValue);
-            customInput.setChangedListener(text -> params.put(def.key, text));
+            customInput.setValue(currentValue);
+            customInput.setResponder(text -> params.put(def.key, text));
             customInput.setFocused(true);
-            this.addDrawableChild(customInput);
+            this.addRenderableWidget(customInput);
 
-            this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("§a✓"),
+            this.addRenderableWidget(Button.builder(
+                Component.literal("§a✓"),
                 button -> {
                     dropdownCustomKey = "";
                     rebuild();
                 }
-            ).dimensions(btnX + btnWidth + 2, y, 20, 20).build());
+            ).bounds(btnX + btnWidth + 2, y, 20, 20).build());
             return;
         }
 
         String displayName = tryGetDisplayName(def.registryType, currentValue);
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("§e🔍 " + displayName + " §7[点击浏览]"),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("§e🔍 " + displayName + " §7[点击浏览]"),
             button -> {
-                if (this.client != null) {
-                    this.client.setScreen(new RegistrySelectionScreen(
+                if (this.minecraft != null) {
+                    this.minecraft.setScreen(new RegistrySelectionScreen(
                         this, def, currentValue, selectedValue -> {
                             params.put(def.key, selectedValue);
                         }
                     ));
                 }
             }
-        ).dimensions(btnX, y, btnWidth, 20).build());
+        ).bounds(btnX, y, btnWidth, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal("✏️"),
+        this.addRenderableWidget(Button.builder(
+            Component.literal("✏️"),
             button -> {
                 dropdownCustomKey = def.key;
                 rebuild();
             }
-        ).dimensions(btnX + btnWidth + 2, y, 20, 20).build());
+        ).bounds(btnX + btnWidth + 2, y, 20, 20).build());
     }
 
     private String tryGetDisplayName(ShenParamHelper.RegistryType type, String idStr) {
-        Identifier id = Identifier.tryParse(idStr);
+        ResourceLocation id = ResourceLocation.tryParse(idStr);
         if (id == null) return "✏️ " + idStr;
         switch (type) {
             case STATUS_EFFECT: {
-                var effect = Registries.STATUS_EFFECT.get(id);
+                var effect = BuiltInRegistries.MOB_EFFECT.get(id);
                 if (effect != null) {
-                    String name = I18n.translate(effect.getTranslationKey());
+                    String name = I18n.get(effect.getDescriptionId());
                     if (!name.startsWith("effect.")) return name;
                 }
                 return "✏️ " + idStr;
             }
             case ENTITY_TYPE: {
-                var et = Registries.ENTITY_TYPE.get(id);
+                var et = BuiltInRegistries.ENTITY_TYPE.get(id);
                 if (et != null) {
-                    String name = I18n.translate(et.getTranslationKey());
+                    String name = I18n.get(et.getDescriptionId());
                     if (!name.startsWith("entity.")) return name;
                 }
                 return "✏️ " + idStr;
             }
             case ITEM: {
-                Item item = Registries.ITEM.get(id);
+                Item item = BuiltInRegistries.ITEM.get(id);
                 if (item != null) {
-                    String name = I18n.translate(item.getTranslationKey());
+                    String name = I18n.get(item.getDescriptionId());
                     if (!name.startsWith("item.") && !name.startsWith("block.")) return name;
                 }
                 return "✏️ " + idStr;
             }
             case BLOCK: {
-                Block block = Registries.BLOCK.get(id);
+                Block block = BuiltInRegistries.BLOCK.get(id);
                 if (block != null) {
-                    String name = I18n.translate(block.getTranslationKey());
+                    String name = I18n.get(block.getDescriptionId());
                     if (!name.startsWith("block.")) return name;
                 }
                 return "✏️ " + idStr;
@@ -443,10 +444,10 @@ public class ShenParamConfigScreen extends Screen {
                 return sb.toString();
             }
             case SOUND_EVENT: {
-                var sound = Registries.SOUND_EVENT.get(id);
+                var sound = BuiltInRegistries.SOUND_EVENT.get(id);
                 if (sound != null) {
                     String subtitleKey = "subtitles." + id.getPath().replace('/', '.');
-                    String name = I18n.translate(subtitleKey);
+                    String name = I18n.get(subtitleKey);
                     if (!name.equals(subtitleKey)) return name;
                 }
                 return "✏️ " + idStr;
@@ -458,12 +459,12 @@ public class ShenParamConfigScreen extends Screen {
                 return ShenParamHelper.tryTranslateDamageType(id);
             }
             case ATTRIBUTE: {
-                var attr = Registries.ATTRIBUTE.get(id);
+                var attr = BuiltInRegistries.ATTRIBUTE.get(id);
                 if (attr != null) return ShenParamHelper.tryTranslateAttribute(id, attr);
                 return "✏️ " + idStr;
             }
             case ENCHANTMENT: {
-                var ench = Registries.ENCHANTMENT.get(id);
+                var ench = BuiltInRegistries.ENCHANTMENT.get(id);
                 if (ench != null) return ShenParamHelper.tryTranslateEnchantment(id, ench);
                 return "✏️ " + idStr;
             }
@@ -491,7 +492,7 @@ public class ShenParamConfigScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context);
         super.render(context, mouseX, mouseY, delta);
 
@@ -499,39 +500,39 @@ public class ShenParamConfigScreen extends Screen {
             String scrollHint = scrollOffset > 0
                 ? "§7▲ 滚轮上下滚动 ▼"
                 : "§7▼ 滚轮向下滚动 ▼";
-            context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal(scrollHint),
+            context.drawCenteredString(this.font,
+                Component.literal(scrollHint),
                 this.width / 2, this.height - 10, 0x666666);
         }
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.client != null && hasControlDown()) {
+        if (this.minecraft != null && hasControlDown()) {
             var focused = this.getFocused();
-            if (focused instanceof TextFieldWidget tf) {
+            if (focused instanceof EditBox tf) {
                 if (keyCode == 86) {
-                    String clipboard = this.client.keyboard.getClipboard();
+                    String clipboard = this.minecraft.keyboardHandler.getClipboard();
                     if (clipboard != null) {
                         pasteIntoTextField(tf, clipboard);
                     }
                     return true;
                 } else if (keyCode == 67) {
-                    String selected = tf.getSelectedText();
+                    String selected = getSelectedText(tf);
                     if (selected != null && !selected.isEmpty()) {
-                        this.client.keyboard.setClipboard(selected);
+                        this.minecraft.keyboardHandler.setClipboard(selected);
                     }
                     return true;
                 } else if (keyCode == 88) {
-                    String selected = tf.getSelectedText();
+                    String selected = getSelectedText(tf);
                     if (selected != null && !selected.isEmpty()) {
-                        this.client.keyboard.setClipboard(selected);
+                        this.minecraft.keyboardHandler.setClipboard(selected);
                         pasteIntoTextField(tf, "");
                     }
                     return true;
                 } else if (keyCode == 65) {
-                    tf.setSelectionStart(0);
-                    tf.setSelectionEnd(tf.getText().length());
+                    tf.setCursorPosition(0);
+                    tf.setHighlightPos(tf.getValue().length());
                     return true;
                 }
             }
@@ -544,22 +545,25 @@ public class ShenParamConfigScreen extends Screen {
         return false;
     }
 
-    private void pasteIntoTextField(TextFieldWidget tf, String content) {
-        tf.write(content);
+    private static String getSelectedText(EditBox tf) {
+        return tf.getHighlighted();
+    }
+
+    private void pasteIntoTextField(EditBox tf, String content) {
+        tf.insertText(content);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double verticalAmount) {
         if (verticalAmount != 0) {
             scrollOffset = (int) Math.max(0, Math.min(maxScroll, scrollOffset - verticalAmount * 20));
-            this.clearChildren();
+            this.clearWidgets();
             this.init();
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, verticalAmount);
     }
 
-    @Override
     public boolean shouldPause() {
         return false;
     }

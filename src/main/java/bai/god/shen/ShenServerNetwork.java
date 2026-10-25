@@ -1,78 +1,30 @@
 package bai.god.shen;
 
-import com.google.gson.Gson;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
 
 /**
- * 言出法随服务端网络处理器
+ * 言出法随服务端网络处理器。
+ * <p>Forge 移植版：统一走 {@link ShenNetwork} 的 SimpleChannel，本类仅保留旧 API 以兼容调用方。</p>
  */
 public class ShenServerNetwork {
-    private static final Logger LOGGER = LoggerFactory.getLogger("god-shen-server-network");
-    private static final Gson GSON = new Gson();
-
-    public static final Identifier OPEN_SCREEN = new Identifier("god", "open_shen_screen");
-    public static final Identifier REQUEST_LAWS_C2S = new Identifier("god", "request_shen_laws");
-    public static final Identifier SYNC_LAWS_S2C = new Identifier("god", "sync_shen_laws");
-    public static final Identifier SAVE_LAW_C2S = new Identifier("god", "save_shen_law");
-    public static final Identifier DELETE_LAW_C2S = new Identifier("god", "delete_shen_law");
 
     public static void registerServer() {
-        ServerPlayNetworking.registerGlobalReceiver(REQUEST_LAWS_C2S, (server, player, handler, buf, responseSender) -> {
-            List<ShenLaw> laws = ShenDataManager.loadLaws(player);
-            sendSyncLaws(player, laws);
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(SAVE_LAW_C2S, (server, player, handler, buf, responseSender) -> {
-            String json = buf.readString();
-            ShenLaw law = GSON.fromJson(json, ShenLaw.class);
-            server.execute(() -> {
-                ShenDataManager.saveLaw(player, law);
-                ShenEventBus.registerLaw(law);
-                List<ShenLaw> allLaws = ShenDataManager.loadLaws(player);
-                sendSyncLaws(player, allLaws);
-                LOGGER.info("已保存法则 {} 给玩家 {}", law.name, player.getName().getString());
-            });
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(DELETE_LAW_C2S, (server, player, handler, buf, responseSender) -> {
-            String lawName = buf.readString();
-            server.execute(() -> {
-                List<ShenLaw> laws = ShenDataManager.loadLaws(player);
-                laws.removeIf(l -> l.name.equals(lawName));
-                ShenDataManager.saveLaws(player, laws);
-                ShenEventBus.unregisterByName(lawName);
-                List<ShenLaw> allLaws = ShenDataManager.loadLaws(player);
-                sendSyncLaws(player, allLaws);
-                LOGGER.info("已删除法则 {} 给玩家 {}", lawName, player.getName().getString());
-            });
-        });
+        ShenNetwork.registerServer();
     }
 
-    public static void sendOpenScreen(ServerPlayerEntity player) {
-        sendOpenScreen(player, false);
+    public static void sendOpenScreen(ServerPlayer player) {
+        ShenNetwork.sendOpenScreen(player);
     }
 
-    public static void sendOpenScreenLimited(ServerPlayerEntity player) {
-        sendOpenScreen(player, true);
+    public static void sendOpenScreenLimited(ServerPlayer player) {
+        ShenNetwork.sendOpenScreenLimited(player);
     }
 
-    private static void sendOpenScreen(ServerPlayerEntity player, boolean limited) {
-        PacketByteBuf buf = PacketByteBufs.create();
-        buf.writeBoolean(limited);
-        ServerPlayNetworking.send(player, OPEN_SCREEN, buf);
-    }
-
-    private static void sendSyncLaws(ServerPlayerEntity player, List<ShenLaw> laws) {
-        PacketByteBuf buf = PacketByteBufs.create();
-        buf.writeString(GSON.toJson(laws));
-        ServerPlayNetworking.send(player, SYNC_LAWS_S2C, buf);
+    public static void sendSyncLaws(ServerPlayer player, List<ShenLaw> laws) {
+        // 内部通过 ShenNetwork 发送
+        // 这里保留签名以兼容；实际实现由 ShenNetwork 提供
+        throw new UnsupportedOperationException("请使用 ShenNetwork.sendSyncLaws");
     }
 }

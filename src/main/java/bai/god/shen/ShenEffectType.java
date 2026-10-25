@@ -1,6 +1,6 @@
 package bai.god.shen;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public enum ShenEffectType {
     MODIFY_HEALTH("实体操作", "修改生命值"),
@@ -45,6 +45,7 @@ public enum ShenEffectType {
     REPAIR_ITEM("物品操作", "修复物品"),
     SPAWN_LIGHTNING("实体操作", "召唤闪电"),
     SET_INVISIBLE("玩家操作", "设置隐身"),
+    SET_INVINCIBLE("玩家操作", "无敌"),
     SATURATE_FOOD("玩家操作", "恢复饱食"),
     SET_STEP_HEIGHT("玩家操作", "设置步高"),
     SET_RESISTANCE("玩家操作", "设置伤害减免"),
@@ -55,6 +56,7 @@ public enum ShenEffectType {
     FREEZE_ENTITY("实体操作", "冻结实体"),
     PLACE_STRUCTURE("结构操作", "放置结构"),
     MASS_REPLACE_BLOCKS("方块操作", "移山填海"),
+    CLEAVE_LAND("方块操作", "劈大陆"),
     MOD_ADAPTER_EFFECT("适配器效果", "模组适配效果"),
 
     SMFS_SET_SPIRIT_RESISTANCE("神秘复苏", "设置灵异抗性"),
@@ -95,7 +97,7 @@ public enum ShenEffectType {
         return displayName;
     }
 
-    public Text toText() {
-        return Text.literal(category + " · " + displayName);
+    public Component toText() {
+        return Component.literal(category + " · " + displayName);
     }
 }
